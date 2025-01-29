@@ -4,12 +4,6 @@ import { usePenguinGameContract } from "@/lib/contract";
 import { useState, useEffect } from "react";
 import { useAccount } from "wagmi";
 
-type LevelLeaderboard = {
-  level: number;
-  addresses: readonly `0x${string}`[];
-  scores: readonly bigint[];
-};
-
 // Add type for social identities
 interface SocialIdentity {
   displayName: string;
@@ -74,12 +68,12 @@ async function resolveNameWithFallback(addr: string): Promise<NameResolution> {
 }
 
 export default function LeaderboardDisplay({
-  refreshKey,
+  refreshKey: _,
 }: {
   refreshKey?: number;
 }) {
   const { leaderboards, refetchLeaderboard } = usePenguinGameContract();
-  const [isHighlighted, setIsHighlighted] = useState(false);
+  const [isHighlighted] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { address } = useAccount();
 

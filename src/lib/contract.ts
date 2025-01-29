@@ -1,8 +1,7 @@
 import { useReadContract, useWriteContract } from "wagmi";
-import { type Hash, type TransactionReceipt } from "viem";
-import { abi } from "./abi";
-import { useEffect } from "react";
+import { type TransactionReceipt } from "viem";
 import { keccak256, toUtf8Bytes } from "ethers";
+import { useEffect } from "react";
 
 const PENGUIN_GAME_ABI = [
   {
@@ -278,4 +277,14 @@ export function usePenguinGameContract() {
     leaderboards,
     refetchLeaderboard,
   };
+}
+
+function handleError(error: Error | null): never {
+  if (!error) throw new Error("Unknown error");
+
+  if (error.message?.includes("User denied")) {
+    throw new Error("Transaction rejected");
+  }
+
+  throw error;
 }
