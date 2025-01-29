@@ -1,6 +1,6 @@
 import { usePenguinGameContract } from "@/lib/contract";
 import type { LeaderboardEntry } from "@/lib/contract";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useEnsName } from "@/hooks/useEnsName";
 
 interface MiniLeaderboardProps {
@@ -16,15 +16,20 @@ const AddressDisplay = ({ address }: { address: string }) => {
   );
 };
 
-const MiniLeaderboard: React.FC<MiniLeaderboardProps> = ({ level }) => {
-  const { leaderboards, refreshLeaderboard } = usePenguinGameContract();
+const MiniLeaderboard: React.FC<{ level: number }> = ({ level }) => {
+  const { leaderboards } = usePenguinGameContract();
+  const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    refreshLeaderboard();
-  }, [level, refreshLeaderboard]);
+    setIsLoaded(true);
+  }, []);
 
-  const currentLeaderboard = leaderboards.find((lb) => lb.level === level);
-  const topThree = currentLeaderboard?.data?.slice(0, 3);
+  if (!isLoaded) return null;
+
+  const currentLeaderboard = leaderboards[level - 1];
+  if (!currentLeaderboard?.data?.length) return null;
+
+  const topThree = currentLeaderboard.data.slice(0, 3);
 
   return (
     <div className="bg-white/90 p-2 rounded-lg shadow-sm text-center">

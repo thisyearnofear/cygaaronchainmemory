@@ -54,7 +54,7 @@ const getRandomComment = (comments: readonly string[]) =>
 const getRandomBoolean = () => Math.random() > 0.5;
 
 const CommentaryOverlay: React.FC<CommentaryOverlayProps> = memo(
-  ({ clicks, level, matches = 0 }) => {
+  function CommentaryOverlay({ clicks, level, matches = 0 }) {
     const [key, setKey] = useState(0);
     const [position, setPosition] = useState({ x: 0, y: 0 });
     const [currentComment, setCurrentComment] = useState<CommentaryType | null>(

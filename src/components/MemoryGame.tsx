@@ -183,7 +183,7 @@ const useGameInitialization = (
         selectedTiles: [],
       }));
     }
-  }, [gameState.gameStarted, gameState.level]);
+  }, [gameState.gameStarted, gameState.level, setGameState]);
 };
 
 // Add type guard for Level 3 config
@@ -221,9 +221,6 @@ const MemoryGame: React.FC = () => {
     },
     wrongAttempts: {},
   });
-
-  // Add a loading state to prevent multiple clicks
-  const [isProcessingMatch, setIsProcessingMatch] = useState(false);
 
   // Add matches count to state
   const [matchCount, setMatchCount] = useState(0);
@@ -318,7 +315,6 @@ const MemoryGame: React.FC = () => {
         revealed: matchedTiles.includes(index) ? true : tile.revealed,
       }));
 
-      // Check if all matchable tiles are matched
       const matchableTiles = newTiles.filter(
         (tile) => tile.value !== 7 && tile.value !== 8
       );
@@ -332,12 +328,10 @@ const MemoryGame: React.FC = () => {
       };
     });
 
-    // Update match count for commentary
     setMatchCount((prev) => prev + 1);
   }, []);
 
   const handleNoMatch = useCallback((selectedTiles: number[]) => {
-    // Update wrong attempts counter
     setGameState((prev) => {
       const newWrongAttempts = { ...prev.wrongAttempts };
       selectedTiles.forEach((index) => {
@@ -350,7 +344,6 @@ const MemoryGame: React.FC = () => {
       };
     });
 
-    // Hide tiles after a delay
     setTimeout(() => {
       setGameState((prev) => ({
         ...prev,
@@ -413,61 +406,27 @@ const MemoryGame: React.FC = () => {
     }
   };
 
-  // Update the score submission logic with proper types
+  // Update handleSubmitScore to fix the argument format
   const handleSubmitScore = async () => {
-    if (gameState.clicks < 8) {
-      alert("Score too low - minimum 8 clicks required per level");
-      return;
-    }
+    if (!account || completionState.isSubmitting) return;
+
+    setCompletionState((prev) => ({ ...prev, isSubmitting: true }));
 
     try {
-      setCompletionState((prev) => ({ ...prev, isSubmitting: true }));
+      await startGame(gameState.level);
+      // Fix: Pass score as array of arguments matching contract expectations
+      await submitScore([
+        BigInt(gameState.level),
+        BigInt(gameState.clicks),
+        "0x" as const,
+      ]);
 
-      // First transaction - start game session
-      try {
-        await startGame(gameState.level);
-      } catch (error: any) {
-        if (error?.message?.includes("rejected")) {
-          setGameState((prev) => ({
-            ...prev,
-            submissionStatus: {
-              success: false,
-              message:
-                "Game session activation cancelled. You can try again or proceed to the next level.",
-              showLeaderboard: false,
-            },
-          }));
-          return;
-        }
-        throw error;
-      }
+      setCompletionState((prev) => ({
+        ...prev,
+        isSubmitting: false,
+        hasSubmitted: true,
+      }));
 
-      // Second transaction - submit score
-      try {
-        const tx = await submitScore([
-          BigInt(gameState.level),
-          BigInt(gameState.clicks),
-          "0x" as const,
-        ]);
-        await tx.wait();
-      } catch (error: any) {
-        if (error?.message?.includes("rejected")) {
-          setGameState((prev) => ({
-            ...prev,
-            submissionStatus: {
-              success: false,
-              message:
-                "Score submission cancelled. Your game session is active - you can try submitting again.",
-              showLeaderboard: false,
-            },
-          }));
-          return;
-        }
-        throw error;
-      }
-
-      // Success case
-      await refreshLeaderboard();
       setGameState((prev) => ({
         ...prev,
         submissionStatus: {
@@ -475,19 +434,20 @@ const MemoryGame: React.FC = () => {
           message: "Score submitted successfully!",
           showLeaderboard: true,
         },
+        leaderboardKey: Date.now(),
       }));
     } catch (error) {
-      console.error("Failed to submit score:", error);
+      console.error("Score submission error:", error);
+      setCompletionState((prev) => ({ ...prev, isSubmitting: false }));
       setGameState((prev) => ({
         ...prev,
         submissionStatus: {
           success: false,
-          message: "An error occurred. Please try again.",
+          message:
+            error instanceof Error ? error.message : "Failed to submit score",
           showLeaderboard: false,
         },
       }));
-    } finally {
-      setCompletionState((prev) => ({ ...prev, isSubmitting: false }));
     }
   };
 
@@ -541,8 +501,6 @@ const MemoryGame: React.FC = () => {
       const maxSelections = gameState.level === 1 ? 2 : 3;
 
       if (gameState.selectedTiles.length === maxSelections) {
-        setIsProcessingMatch(true);
-
         const selectedValues = gameState.selectedTiles.map(
           (index) => gameState.tiles[index].value
         );
@@ -595,8 +553,6 @@ const MemoryGame: React.FC = () => {
         if (isMatch) {
           setMatchCount((prev) => prev + 1);
         }
-
-        setIsProcessingMatch(false);
       }
     };
 
@@ -791,15 +747,17 @@ const MemoryGame: React.FC = () => {
 
               {/* Submit/Back Buttons */}
               <div className="space-y-3">
-                <button
-                  onClick={handleSubmitScore}
-                  disabled={completionState.isSubmitting}
-                  className="w-full bg-emerald-500 text-white py-3 px-4 rounded-lg hover:bg-emerald-600 transition-colors disabled:bg-emerald-300"
-                >
-                  {completionState.isSubmitting
-                    ? "Processing..."
-                    : "Submit Score"}
-                </button>
+                {!gameState.submissionStatus?.success && (
+                  <button
+                    onClick={handleSubmitScore}
+                    disabled={completionState.isSubmitting}
+                    className="w-full bg-emerald-500 text-white py-3 px-4 rounded-lg hover:bg-emerald-600 transition-colors disabled:bg-emerald-300"
+                  >
+                    {completionState.isSubmitting
+                      ? "Processing..."
+                      : "Submit Score"}
+                  </button>
+                )}
                 <button
                   onClick={() =>
                     setCompletionState((prev) => ({
