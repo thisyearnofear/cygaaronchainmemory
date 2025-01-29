@@ -77,12 +77,6 @@ const LEVEL_CONFIG = {
   Level1Config | Level2Config | Level3Config
 >;
 
-// Move these type definitions outside
-type LeaderboardEntry = {
-  player: `0x${string}`;
-  score: bigint;
-};
-
 // Add type guard function
 function isLevel2Config(
   config: Level1Config | Level2Config | Level3Config
@@ -289,7 +283,7 @@ const MemoryGame: React.FC = () => {
     }));
   }, [gameState.level]);
 
-  const handleLevelComplete = async () => {
+  const handleLevelComplete = useCallback(async () => {
     try {
       // Show celebration first
       setGameState((prev) => ({ ...prev, showCelebration: true }));
@@ -300,7 +294,7 @@ const MemoryGame: React.FC = () => {
       console.error("Level completion error:", error);
       alert("Failed to submit score. Please try again.");
     }
-  };
+  }, [gameState.level, startGame]);
 
   // Add these handlers before the handleTileClick function
   const handleMatch = useCallback((matchedTiles: number[]) => {
