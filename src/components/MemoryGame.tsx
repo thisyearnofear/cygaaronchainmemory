@@ -299,10 +299,10 @@ const MemoryGame: React.FC = () => {
   // Add these handlers before the handleTileClick function
   const handleMatch = useCallback((matchedTiles: number[]) => {
     setGameState((prev) => {
-      const newTiles = prev.tiles.map((tile, index) => ({
+      const newTiles = prev.tiles.map((tile) => ({
         ...tile,
-        matched: matchedTiles.includes(index) ? true : tile.matched,
-        revealed: matchedTiles.includes(index) ? true : tile.revealed,
+        matched: matchedTiles.includes(tile.id) ? true : tile.matched,
+        revealed: matchedTiles.includes(tile.id) ? true : tile.revealed,
       }));
 
       const matchableTiles = newTiles.filter(
@@ -345,7 +345,7 @@ const MemoryGame: React.FC = () => {
       setGameState((prev) => ({
         ...prev,
         selectedTiles: [],
-        tiles: prev.tiles.map((tile, index) => ({
+        tiles: prev.tiles.map((tile) => ({
           ...tile,
           revealed: tile.matched ? true : false, // Keep matched tiles revealed
         })),
