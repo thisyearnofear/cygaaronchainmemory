@@ -4,7 +4,7 @@
 
 @layer base {
   body {
-    @apply bg-sky-200 min-h-screen;
+    @apply bg-emerald-100 min-h-screen;
   }
 }
 
@@ -49,8 +49,17 @@
 
   .game-tile.matched {
     animation: matchShake 0.5s ease-in-out, matchGlow 2s ease-in-out;
-    border: 2px solid #4ade80;
+    border: 2px solid #10b981;
     background-color: rgba(167, 243, 208, 0.1);
+  }
+
+  /* Update button colors */
+  .btn-primary {
+    @apply bg-emerald-500 text-white py-2 px-4 rounded-lg hover:bg-emerald-600 transition-colors;
+  }
+
+  .btn-secondary {
+    @apply bg-emerald-100 text-emerald-700 py-2 px-4 rounded-lg hover:bg-emerald-200 transition-colors;
   }
 }
 
@@ -84,15 +93,15 @@
 
 @keyframes matchGlow {
   0% {
-    box-shadow: 0 0 5px #4ade80;
+    box-shadow: 0 0 5px #10b981;
     background-color: rgba(255, 255, 255, 0.9);
   }
   50% {
-    box-shadow: 0 0 20px #4ade80;
+    box-shadow: 0 0 20px #10b981;
     background-color: rgba(167, 243, 208, 0.9);
   }
   100% {
-    box-shadow: 0 0 5px #4ade80;
+    box-shadow: 0 0 5px #10b981;
     background-color: rgba(255, 255, 255, 0.9);
   }
 }
@@ -131,4 +140,97 @@
   .game-grid {
     @apply gap-2 p-2;
   }
+}
+
+.transition-all {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.duration-300 {
+  transition-duration: 300ms;
+}
+
+/* Add to your existing CSS */
+.speech-bubble::after {
+  content: "";
+  position: absolute;
+  right: -10px;
+  bottom: 20px;
+  border-width: 10px;
+  border-style: solid;
+  border-color: transparent transparent transparent rgba(255, 255, 255, 0.9);
+}
+
+/* Ensure overlay animations are smooth */
+.commentary-overlay {
+  transition: all 0.3s ease-in-out;
+}
+
+/* Add to your animations section */
+@keyframes popIn {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+  70% {
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes wrongMatch {
+  0%,
+  100% {
+    transform: translateX(0);
+    background-color: transparent;
+  }
+  20%,
+  60% {
+    transform: translateX(-5px);
+    background-color: rgba(254, 226, 226, 0.9);
+  }
+  40%,
+  80% {
+    transform: translateX(5px);
+    background-color: rgba(254, 226, 226, 0.9);
+  }
+}
+
+@keyframes wrongMatchSevere {
+  0%,
+  100% {
+    transform: translateX(0) scale(1);
+    background-color: transparent;
+  }
+  20%,
+  60% {
+    transform: translateX(-8px) scale(1.05);
+    background-color: rgba(252, 165, 165, 0.9);
+  }
+  40%,
+  80% {
+    transform: translateX(8px) scale(1.05);
+    background-color: rgba(248, 113, 113, 0.9);
+  }
+}
+
+/* Remove the data-wrong-attempts styling since we're using animations */
+.game-tile[data-wrong-attempts] {
+  background-color: transparent;
+}
+
+.animate-pop-in {
+  animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.animate-wrong-match {
+  animation: wrongMatch 0.8s ease-in-out;
+}
+
+.animate-wrong-match-severe {
+  animation: wrongMatchSevere 1s ease-in-out;
 }

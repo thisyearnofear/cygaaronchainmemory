@@ -67,13 +67,15 @@ async function resolveNameWithFallback(addr: string): Promise<NameResolution> {
   };
 }
 
-export default function LeaderboardDisplay({
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  refreshKey: _refreshKey, // renamed to indicate intent
-}: {
+interface LeaderboardDisplayProps {
   refreshKey?: number;
-}) {
-  const { leaderboards, refetchLeaderboard } = usePenguinGameContract();
+}
+
+const LeaderboardDisplay: React.FC<LeaderboardDisplayProps> = ({
+  refreshKey,
+}) => {
+  const { leaderboards, refreshLeaderboard } = usePenguinGameContract();
+  const [isLoaded, setIsLoaded] = useState(false);
   const [isHighlighted] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { address } = useAccount();
@@ -136,11 +138,19 @@ export default function LeaderboardDisplay({
     });
   }, [leaderboards, address]);
 
+  // Don't auto-load leaderboards
+  useEffect(() => {
+    if (refreshKey !== undefined) {
+      refreshLeaderboard();
+      setIsLoaded(true);
+    }
+  }, [refreshKey, refreshLeaderboard]);
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     console.log("LeaderboardDisplay: Refreshing leaderboard...");
     try {
-      await refetchLeaderboard();
+      await refreshLeaderboard();
       console.log("LeaderboardDisplay: Refresh complete");
     } catch (error) {
       console.error("LeaderboardDisplay: Refresh failed:", error);
@@ -148,6 +158,33 @@ export default function LeaderboardDisplay({
       setIsRefreshing(false);
     }
   };
+
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Handle initial load here instead of during render
+    setIsLoading(false);
+  }, [leaderboards]);
+
+  if (!isLoaded) {
+    return (
+      <div className="text-center p-4">
+        <button
+          onClick={() => {
+            refreshLeaderboard();
+            setIsLoaded(true);
+          }}
+          className="bg-emerald-100 text-emerald-700 px-4 py-2 rounded-lg hover:bg-emerald-200 transition-colors"
+        >
+          Load Leaderboards
+        </button>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return <div>Loading leaderboards...</div>;
+  }
 
   return (
     <div
@@ -209,4 +246,6 @@ export default function LeaderboardDisplay({
       </div>
     </div>
   );
-}
+};
+
+export default LeaderboardDisplay;

@@ -1,6 +1,12 @@
-import { useReadContract, useWriteContract } from "wagmi";
+import {
+  useReadContract,
+  useWriteContract,
+  useWalletClient,
+  useChainId,
+} from "wagmi";
 import { keccak256, type TransactionReceipt, stringToHex } from "viem";
-import { useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { publicClient } from "@/app/providers";
 
 const PENGUIN_GAME_ABI = [
   {
@@ -50,12 +56,15 @@ type WagmiTransaction = {
   wait: () => Promise<TransactionReceipt>;
 };
 
-type LeaderboardEntry = {
+export type LeaderboardEntry = {
   player: `0x${string}`;
   score: bigint;
 };
 
-type LeaderboardData = readonly LeaderboardEntry[];
+export type LeaderboardData = {
+  level: number;
+  data: readonly LeaderboardEntry[];
+};
 
 // Add type for the receipt status
 type TransactionStatus = "success" | "reverted" | 1 | "0x1";
@@ -67,120 +76,70 @@ type ErrorWithMessage = Error & {
 
 export function usePenguinGameContract() {
   const { writeContractAsync } = useWriteContract();
+  const [leaderboards, setLeaderboards] = useState<LeaderboardData[]>([]);
+  const { data: walletClient } = useWalletClient();
+  const chainId = useChainId();
+
+  const refreshLeaderboard = useCallback(async () => {
+    if (!chainId) return;
+
+    try {
+      console.log("Refreshing all leaderboards...");
+      const newLeaderboards: LeaderboardData[] = [];
+
+      for (let level = 1; level <= 3; level++) {
+        try {
+          const data = (await publicClient.readContract({
+            address: CONTRACT_ADDRESS,
+            abi: PENGUIN_GAME_ABI,
+            functionName: "getLeaderboard",
+            args: [BigInt(level)],
+          })) as readonly LeaderboardEntry[];
+
+          newLeaderboards.push({ level, data });
+        } catch (error) {
+          console.error(`Level ${level} leaderboard error:`, error);
+          newLeaderboards.push({ level, data: [] });
+        }
+      }
+
+      setLeaderboards(newLeaderboards);
+    } catch (error) {
+      console.error("Failed to fetch leaderboard:", error);
+    }
+  }, [chainId]);
 
   const startGame = async (level: number) => {
-    // Generate a random level hash using viem's utilities
-    const levelHash = keccak256(
-      stringToHex(
-        JSON.stringify({
-          level,
-          timestamp: Date.now(),
-          random: Math.random(),
-        })
-      )
-    );
+    try {
+      // Generate a random level hash using viem's utilities
+      const levelHash = keccak256(
+        stringToHex(
+          JSON.stringify({
+            level,
+            timestamp: Date.now(),
+            random: Math.random(),
+          })
+        )
+      );
 
-    console.log("Starting game session...", { level, levelHash });
+      console.log("Starting game session...", { level, levelHash });
 
-    const hash = await writeContractAsync({
-      address: CONTRACT_ADDRESS,
-      abi: PENGUIN_GAME_ABI,
-      functionName: "startGame",
-      args: [BigInt(level), levelHash],
-    });
+      const hash = await writeContractAsync({
+        address: CONTRACT_ADDRESS,
+        abi: PENGUIN_GAME_ABI,
+        functionName: "startGame",
+        args: [BigInt(level), levelHash],
+      });
 
-    return hash;
+      // Wait for transaction to be mined
+      await publicClient.waitForTransactionReceipt({ hash });
+
+      return hash;
+    } catch (error) {
+      console.error("Failed to start game:", error);
+      throw error;
+    }
   };
-
-  // Create separate hooks for each level's leaderboard
-  const {
-    data: level1Leaderboard,
-    refetch: refetchLevel1,
-    error: error1,
-  } = useReadContract({
-    address: CONTRACT_ADDRESS,
-    abi: PENGUIN_GAME_ABI,
-    functionName: "getLeaderboard",
-    args: [BigInt(1)],
-  });
-
-  // Log leaderboard data and errors
-  useEffect(() => {
-    if (level1Leaderboard) {
-      console.log("Level 1 leaderboard fetched:", {
-        addresses: level1Leaderboard.map(
-          (entry: LeaderboardEntry) => entry.player
-        ),
-        scores: level1Leaderboard.map((entry: LeaderboardEntry) =>
-          Number(entry.score)
-        ),
-      });
-    }
-    if (error1) {
-      console.error("Level 1 leaderboard error:", error1);
-    }
-  }, [level1Leaderboard, error1]);
-
-  const {
-    data: level2Leaderboard,
-    refetch: refetchLevel2,
-    error: error2,
-  } = useReadContract({
-    address: CONTRACT_ADDRESS,
-    abi: PENGUIN_GAME_ABI,
-    functionName: "getLeaderboard",
-    args: [BigInt(2)],
-  });
-
-  const {
-    data: level3Leaderboard,
-    refetch: refetchLevel3,
-    error: error3,
-  } = useReadContract({
-    address: CONTRACT_ADDRESS,
-    abi: PENGUIN_GAME_ABI,
-    functionName: "getLeaderboard",
-    args: [BigInt(3)],
-  });
-
-  // Log leaderboard data and errors
-  useEffect(() => {
-    if (level2Leaderboard) {
-      console.log("Level 2 leaderboard fetched:", {
-        addresses: level2Leaderboard.map(
-          (entry: LeaderboardEntry) => entry.player
-        ),
-        scores: level2Leaderboard.map((entry: LeaderboardEntry) =>
-          Number(entry.score)
-        ),
-      });
-    }
-    if (error2) {
-      console.error("Level 2 leaderboard error:", error2);
-    }
-  }, [level2Leaderboard, error2]);
-
-  useEffect(() => {
-    if (level3Leaderboard) {
-      console.log("Level 3 leaderboard fetched:", {
-        addresses: level3Leaderboard.map(
-          (entry: LeaderboardEntry) => entry.player
-        ),
-        scores: level3Leaderboard.map((entry: LeaderboardEntry) =>
-          Number(entry.score)
-        ),
-      });
-    }
-    if (error3) {
-      console.error("Level 3 leaderboard error:", error3);
-    }
-  }, [level3Leaderboard, error3]);
-
-  const leaderboards = [
-    { level: 1, data: level1Leaderboard as LeaderboardData | undefined },
-    { level: 2, data: level2Leaderboard as LeaderboardData | undefined },
-    { level: 3, data: level3Leaderboard as LeaderboardData | undefined },
-  ];
 
   const submitScore = async (
     args: [bigint, bigint, `0x${string}`]
@@ -232,17 +191,7 @@ export function usePenguinGameContract() {
             console.log(`Refreshing leaderboard for level ${level}`);
 
             try {
-              switch (level) {
-                case 1:
-                  await refetchLevel1();
-                  break;
-                case 2:
-                  await refetchLevel2();
-                  break;
-                case 3:
-                  await refetchLevel3();
-                  break;
-              }
+              await refreshLeaderboard();
               console.log("Leaderboard refresh completed");
             } catch (error) {
               console.error("Failed to refresh leaderboard:", error);
@@ -260,34 +209,11 @@ export function usePenguinGameContract() {
     }
   };
 
-  const refetchLeaderboard = async () => {
-    console.log("Refreshing all leaderboards...");
-    try {
-      const results = await Promise.all([
-        refetchLevel1().catch((e) => {
-          console.error("Level 1 refresh error:", e);
-          return null;
-        }),
-        refetchLevel2().catch((e) => {
-          console.error("Level 2 refresh error:", e);
-          return null;
-        }),
-        refetchLevel3().catch((e) => {
-          console.error("Level 3 refresh error:", e);
-          return null;
-        }),
-      ]);
-      console.log("All leaderboards refreshed:", results);
-    } catch (error) {
-      console.error("Failed to refresh leaderboards:", error);
-    }
-  };
-
   return {
+    leaderboards,
+    refreshLeaderboard,
     startGame,
     submitScore,
-    leaderboards,
-    refetchLeaderboard,
   };
 }
 

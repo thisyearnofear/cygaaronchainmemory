@@ -2,9 +2,9 @@
 
 import { getDefaultConfig, RainbowKitProvider } from "@rainbow-me/rainbowkit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { WagmiProvider } from "wagmi";
-import { http } from "viem";
-import { mainnet } from "viem/chains";
+import { WagmiProvider, createConfig, http } from "wagmi";
+import { mainnet } from "wagmi/chains";
+import { createPublicClient } from "viem";
 import "@rainbow-me/rainbowkit/styles.css";
 import { useState, useEffect } from "react";
 
@@ -28,14 +28,18 @@ const abstractTestnet = {
 } as const;
 
 // Create wagmi config
-const config = getDefaultConfig({
-  appName: "Penguin Memory Game",
-  projectId: "1ac4e0e446668e1e32011669ebc982dc",
+export const config = createConfig({
   chains: [abstractTestnet, mainnet],
   transports: {
     [abstractTestnet.id]: http(),
     [mainnet.id]: http(),
   },
+});
+
+// Create a proper public client using viem
+export const publicClient = createPublicClient({
+  chain: abstractTestnet,
+  transport: http(abstractTestnet.rpcUrls.public.http[0]),
 });
 
 export function Providers({ children }: { children: React.ReactNode }) {

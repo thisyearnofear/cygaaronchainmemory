@@ -5,6 +5,10 @@ import { usePenguinGameContract } from "@/lib/contract";
 import Image from "next/image";
 import { useAccount } from "wagmi";
 import LeaderboardDisplay from "./LeaderboardDisplay";
+import NetworkCheck from "./NetworkCheck";
+import MiniLeaderboard from "./MiniLeaderboard";
+import CommentaryOverlay from "./CommentaryOverlay";
+import MusicPlayer from "./MusicPlayer";
 
 interface Tile {
   id: number;
@@ -20,8 +24,12 @@ type GameHints = {
   showLevel3Hint: boolean;
 };
 
+// First, define a type for valid levels
+type GameLevel = 1 | 2 | 3;
+
+// Update GameState to use the specific level type
 interface GameState {
-  level: number;
+  level: GameLevel; // This ensures level can only be 1, 2, or 3
   clicks: number;
   tiles: Tile[];
   selectedTiles: number[];
@@ -35,6 +43,7 @@ interface GameState {
     message: string;
     showLeaderboard: boolean;
   };
+  wrongAttempts: Record<number, number>;
 }
 
 // Define specific types for each level config
@@ -58,16 +67,15 @@ type Level3Config = {
   yetis: number;
 };
 
-// Type the LEVEL_CONFIG object
-const LEVEL_CONFIG: {
-  1: Level1Config;
-  2: Level2Config;
-  3: Level3Config;
-} = {
+// Type the LEVEL_CONFIG object with specific level types
+const LEVEL_CONFIG = {
   1: { rows: 4, cols: 4, pairs: 8 },
-  2: { rows: 4, cols: 6, triplets: 4, yetis: 3 },
+  2: { rows: 4, cols: 4, triplets: 4, yetis: 1 },
   3: { rows: 5, cols: 6, groups: 6, yetis: 5 },
-} as const;
+} as const satisfies Record<
+  GameLevel,
+  Level1Config | Level2Config | Level3Config
+>;
 
 // Move these type definitions outside
 type LeaderboardEntry = {
@@ -89,9 +97,105 @@ function isLevel2Config(
   return "triplets" in config && "yetis" in config;
 }
 
+// Add this type for better state management
+type CompletionState = {
+  showingOptions: boolean;
+  isSubmitting: boolean;
+  hasSubmitted: boolean;
+};
+
+// First, let's create a separate hook for initialization
+const useGameInitialization = (
+  gameState: GameState,
+  setGameState: React.Dispatch<React.SetStateAction<GameState>>
+) => {
+  useEffect(() => {
+    if (gameState.gameStarted) {
+      const config = LEVEL_CONFIG[gameState.level as GameLevel];
+      const totalTiles = config.rows * config.cols;
+
+      let values: number[] = [];
+
+      if (gameState.level === 1) {
+        // Level 1 initialization
+        for (let i = 0; i < totalTiles / 2; i++) {
+          values.push(i, i);
+        }
+      } else if (gameState.level === 2) {
+        // Level 2 initialization
+        if (!isLevel2Config(config)) {
+          console.error("Invalid config for level 2");
+          return;
+        }
+
+        // Add triplets
+        for (let i = 0; i < config.triplets; i++) {
+          values.push(i, i, i);
+        }
+
+        // Add 1 yeti
+        values.push(8);
+
+        // Fill remaining tiles with non-matching penguins
+        const remainingTiles = totalTiles - values.length;
+        for (let i = 0; i < remainingTiles; i++) {
+          values.push(7);
+        }
+      } else if (gameState.level === 3) {
+        // Level 3 initialization
+        if (!isLevel3Config(config)) {
+          console.error("Invalid config for level 3");
+          return;
+        }
+
+        // Add groups of matching penguins
+        for (let i = 0; i < config.groups; i++) {
+          // Each group has 4 matching penguins
+          values.push(i, i, i, i);
+        }
+
+        // Add yetis
+        for (let i = 0; i < config.yetis; i++) {
+          values.push(8);
+        }
+
+        // Fill any remaining spaces with non-matching penguins
+        const remainingTiles = totalTiles - values.length;
+        for (let i = 0; i < remainingTiles; i++) {
+          values.push(7);
+        }
+      }
+
+      // Shuffle values
+      values = values.sort(() => Math.random() - 0.5);
+
+      // Create tiles
+      const initialTiles = values.map((value, index) => ({
+        id: index,
+        value,
+        revealed: false,
+        matched: false,
+      }));
+
+      setGameState((prev) => ({
+        ...prev,
+        tiles: initialTiles,
+        selectedTiles: [],
+      }));
+    }
+  }, [gameState.gameStarted, gameState.level]);
+};
+
+// Add type guard for Level 3 config
+function isLevel3Config(
+  config: Level1Config | Level2Config | Level3Config
+): config is Level3Config {
+  return "groups" in config && "yetis" in config;
+}
+
 const MemoryGame: React.FC = () => {
   // Move the hook inside the component
-  const { submitScore, refetchLeaderboard, startGame, leaderboards } =
+  const { submitScore, leaderboards, refreshLeaderboard, startGame } =
     usePenguinGameContract();
 
   const { isConnected, address: account } = useAccount();
@@ -103,6 +207,7 @@ const MemoryGame: React.FC = () => {
     gameStarted: false,
     showYeti: false,
     showCelebration: false,
+    leaderboardKey: undefined,
     hints: {
       showPatternHint: false,
       showMatchingHint: false,
@@ -114,191 +219,199 @@ const MemoryGame: React.FC = () => {
       message: "",
       showLeaderboard: false,
     },
+    wrongAttempts: {},
   });
 
   // Add a loading state to prevent multiple clicks
   const [isProcessingMatch, setIsProcessingMatch] = useState(false);
 
-  const initializeGame = useCallback(() => {
-    const config = LEVEL_CONFIG[gameState.level as keyof typeof LEVEL_CONFIG];
-    const totalTiles = config.rows * config.cols;
+  // Add matches count to state
+  const [matchCount, setMatchCount] = useState(0);
 
-    let values: number[] = [];
+  // Add state for completion flow
+  const [completionState, setCompletionState] = useState<CompletionState>({
+    showingOptions: false,
+    isSubmitting: false,
+    hasSubmitted: false,
+  });
 
-    if (gameState.level === 1) {
-      // Level 1: Simple pairs
-      for (let i = 0; i < totalTiles / 2; i++) {
-        values.push(i, i);
-      }
-    } else if (gameState.level === 2) {
-      // Type guard to ensure we have Level2Config
-      if (!isLevel2Config(config)) {
-        console.error("Invalid config for level 2");
-        return;
-      }
+  // Use the initialization hook
+  useGameInitialization(gameState, setGameState);
 
-      // Level 2: 4 triplets (12 tiles) + 3 yetis = 15 tiles total
-      const tripletCount = config.triplets;
-      for (let i = 0; i < tripletCount; i++) {
-        values.push(i, i, i);
-      }
-
-      // Add exactly 3 yetis
-      for (let i = 0; i < config.yetis; i++) {
-        values.push(8);
-      }
-
-      // Fill remaining tiles with dummy penguins if needed
-      while (values.length < totalTiles) {
-        values.push(7);
-      }
-    } else if (gameState.level === 3) {
-      // Type guard for Level3Config
-      if (!("groups" in config && "yetis" in config)) {
-        console.error("Invalid config for level 3");
-        return;
-      }
-
-      // Create groups of varying sizes (2-4 penguins)
-      let remainingTiles = totalTiles - config.yetis;
-      let penguinType = 0;
-
-      while (remainingTiles > 0) {
-        // Randomly choose group size between 2-4
-        const groupSize = Math.min(
-          Math.floor(Math.random() * 3) + 2,
-          remainingTiles
-        );
-        for (let i = 0; i < groupSize; i++) {
-          values.push(penguinType);
-        }
-        remainingTiles -= groupSize;
-        penguinType++;
-      }
-
-      // Add yetis
-      for (let i = 0; i < config.yetis; i++) {
-        values.push(8); // 8 represents yeti
-      }
-    }
-
-    // Shuffle tiles
-    values = values.sort(() => Math.random() - 0.5);
-
-    const initialTiles = values.map((value, index) => ({
-      id: index,
-      value,
-      revealed: false,
-      matched: false,
-    }));
-
-    setGameState((prev) => ({
-      ...prev,
-      tiles: initialTiles,
-      selectedTiles: [],
-    }));
-  }, [gameState.level]);
-
-  useEffect(() => {
-    if (gameState.gameStarted) {
-      initializeGame();
-    }
-  }, [gameState.gameStarted, initializeGame]);
-
-  const handleStartGame = () => {
+  // Update handleStartGame to not set state directly
+  const handleStartGame = useCallback(() => {
     try {
-      // Initialize tiles
-      const config = LEVEL_CONFIG[gameState.level as keyof typeof LEVEL_CONFIG];
-      const totalTiles = config.rows * config.cols;
-      let values: number[] = [];
-      for (let i = 0; i < totalTiles / 2; i++) {
-        values.push(i, i);
-      }
-      values = values.sort(() => Math.random() - 0.5);
-      const initialTiles = values.map((value, index) => ({
-        id: index,
-        value,
-        revealed: false,
-        matched: false,
-      }));
-
       setGameState((prev) => ({
         ...prev,
         gameStarted: true,
         clicks: 0,
-        tiles: initialTiles,
+        selectedTiles: [],
       }));
     } catch (error) {
       console.error("Failed to initialize game:", error);
       alert("Failed to initialize game. Please try again.");
     }
-  };
+  }, []);
+
+  // Update level transition handlers
+  const handleRetryLevel = useCallback(() => {
+    setGameState((prev) => ({
+      ...prev,
+      level: prev.level,
+      showCelebration: false,
+      gameStarted: false,
+      clicks: 0,
+      tiles: [],
+      selectedTiles: [],
+      submissionStatus: undefined,
+      hints: {
+        showPatternHint: false,
+        showMatchingHint: false,
+        showTripletHint: false,
+        showLevel3Hint: false,
+      },
+      wrongAttempts: {},
+    }));
+  }, []);
+
+  const handleNextLevel = useCallback(() => {
+    if (gameState.level >= 3) return;
+
+    setGameState((prev) => ({
+      ...prev,
+      level: (prev.level + 1) as GameLevel,
+      showCelebration: false,
+      gameStarted: false,
+      clicks: 0,
+      tiles: [],
+      selectedTiles: [],
+      submissionStatus: undefined,
+      hints: {
+        showPatternHint: false,
+        showMatchingHint: false,
+        showTripletHint: false,
+        showLevel3Hint: false,
+      },
+      wrongAttempts: {},
+    }));
+  }, [gameState.level]);
 
   const handleLevelComplete = async () => {
     try {
       // Show celebration first
       setGameState((prev) => ({ ...prev, showCelebration: true }));
 
-      // Let the celebration modal handle score submission and level progression
+      // Start the game session and submit score
+      await startGame(gameState.level);
     } catch (error) {
       console.error("Level completion error:", error);
+      alert("Failed to submit score. Please try again.");
     }
   };
 
-  // Improve the tile click handler
-  const handleTileClick = useCallback(
-    async (index: number) => {
-      if (isProcessingMatch) return;
+  // Add these handlers before the handleTileClick function
+  const handleMatch = useCallback((matchedTiles: number[]) => {
+    setGameState((prev) => {
+      const newTiles = prev.tiles.map((tile, index) => ({
+        ...tile,
+        matched: matchedTiles.includes(index) ? true : tile.matched,
+        revealed: matchedTiles.includes(index) ? true : tile.revealed,
+      }));
 
-      // Get current state values to avoid stale closures
-      setGameState((prev) => {
-        if (!prev.tiles[index]) {
-          console.error("Invalid tile index:", index);
-          return prev;
-        }
+      // Check if all matchable tiles are matched
+      const matchableTiles = newTiles.filter(
+        (tile) => tile.value !== 7 && tile.value !== 8
+      );
+      const allMatched = matchableTiles.every((tile) => tile.matched);
 
-        if (prev.tiles[index].matched || prev.tiles[index].revealed) {
-          return prev;
-        }
+      return {
+        ...prev,
+        tiles: newTiles,
+        selectedTiles: [],
+        showCelebration: allMatched,
+      };
+    });
 
-        // Handle yeti click
-        if (prev.tiles[index].value === 8) {
-          const newState = {
-            ...prev,
-            tiles: prev.tiles.map((tile, i) =>
-              i === index ? { ...tile, revealed: true } : tile
-            ),
-            showYeti: true,
-          };
+    // Update match count for commentary
+    setMatchCount((prev) => prev + 1);
+  }, []);
 
-          setTimeout(() => {
-            setGameState((current) => ({
-              ...current,
-              tiles: current.tiles.map((tile, i) =>
-                i === index ? { ...tile, revealed: false } : tile
-              ),
-              showYeti: false,
-            }));
-          }, 1500);
-
-          return newState;
-        }
-
-        // Update tiles and selected tiles
-        const newTiles = prev.tiles.map((tile, i) =>
-          i === index ? { ...tile, revealed: true } : tile
-        );
-        const newSelectedTiles = [...prev.selectedTiles, index];
-
-        return {
-          ...prev,
-          tiles: newTiles,
-          selectedTiles: newSelectedTiles,
-        };
+  const handleNoMatch = useCallback((selectedTiles: number[]) => {
+    // Update wrong attempts counter
+    setGameState((prev) => {
+      const newWrongAttempts = { ...prev.wrongAttempts };
+      selectedTiles.forEach((index) => {
+        newWrongAttempts[index] = (newWrongAttempts[index] || 0) + 1;
       });
-    },
-    [isProcessingMatch] // Only depend on processing state
-  );
+
+      return {
+        ...prev,
+        wrongAttempts: newWrongAttempts,
+      };
+    });
+
+    // Hide tiles after a delay
+    setTimeout(() => {
+      setGameState((prev) => ({
+        ...prev,
+        selectedTiles: [],
+        tiles: prev.tiles.map((tile, index) => ({
+          ...tile,
+          revealed: selectedTiles.includes(index) ? false : tile.revealed,
+        })),
+      }));
+    }, 1000);
+  }, []);
+
+  // Update the handleTileClick logic for Level 3
+  const handleTileClick = async (index: number) => {
+    if (
+      gameState.tiles[index].matched ||
+      gameState.selectedTiles.includes(index)
+    ) {
+      return;
+    }
+
+    // Increment clicks for every tile click
+    setGameState((prev) => ({
+      ...prev,
+      clicks: prev.clicks + 1,
+      selectedTiles: [...prev.selectedTiles, index],
+      tiles: prev.tiles.map((tile, i) =>
+        i === index ? { ...tile, revealed: true } : tile
+      ),
+    }));
+
+    // Handle yeti click - show animation immediately
+    if (gameState.tiles[index].value === 8) {
+      setGameState((prev) => ({
+        ...prev,
+        showYeti: true,
+        selectedTiles: [],
+        tiles: prev.tiles.map((tile) => ({ ...tile, revealed: false })),
+      }));
+      return;
+    }
+
+    // Check for matches based on level
+    const selectedTiles = [...gameState.selectedTiles, index];
+    const requiredMatches =
+      gameState.level === 3 ? 4 : gameState.level === 2 ? 3 : 2;
+
+    if (selectedTiles.length === requiredMatches) {
+      // Process the match
+      const values = selectedTiles.map((i) => gameState.tiles[i].value);
+      const allMatch = values.every((v) => v === values[0]);
+
+      if (allMatch) {
+        // Handle successful match
+        handleMatch(selectedTiles);
+      } else {
+        // Handle failed match
+        handleNoMatch(selectedTiles);
+      }
+    }
+  };
 
   // Update the score submission logic with proper types
   const handleSubmitScore = async () => {
@@ -308,59 +421,73 @@ const MemoryGame: React.FC = () => {
     }
 
     try {
-      const submitButton = document.getElementById(
-        "submit-score-btn"
-      ) as HTMLButtonElement | null;
-      if (submitButton) {
-        submitButton.disabled = true;
-        submitButton.textContent = "Submitting Score...";
+      setCompletionState((prev) => ({ ...prev, isSubmitting: true }));
+
+      // First transaction - start game session
+      try {
+        await startGame(gameState.level);
+      } catch (error: any) {
+        if (error?.message?.includes("rejected")) {
+          setGameState((prev) => ({
+            ...prev,
+            submissionStatus: {
+              success: false,
+              message:
+                "Game session activation cancelled. You can try again or proceed to the next level.",
+              showLeaderboard: false,
+            },
+          }));
+          return;
+        }
+        throw error;
       }
 
-      await startGame(gameState.level);
-      const tx = await submitScore([
-        BigInt(gameState.level),
-        BigInt(gameState.clicks),
-        "0x" as const,
-      ]);
+      // Second transaction - submit score
+      try {
+        const tx = await submitScore([
+          BigInt(gameState.level),
+          BigInt(gameState.clicks),
+          "0x" as const,
+        ]);
+        await tx.wait();
+      } catch (error: any) {
+        if (error?.message?.includes("rejected")) {
+          setGameState((prev) => ({
+            ...prev,
+            submissionStatus: {
+              success: false,
+              message:
+                "Score submission cancelled. Your game session is active - you can try submitting again.",
+              showLeaderboard: false,
+            },
+          }));
+          return;
+        }
+        throw error;
+      }
 
+      // Success case
+      await refreshLeaderboard();
       setGameState((prev) => ({
         ...prev,
         submissionStatus: {
           success: true,
-          message: "Submitting score to blockchain...",
-          showLeaderboard: false,
+          message: "Score submitted successfully!",
+          showLeaderboard: true,
         },
       }));
-
-      const receipt = await tx.wait();
-      const status = receipt.status as TransactionStatus;
-      const isSuccess =
-        status === "success" || status === 1 || status === "0x1";
-
-      if (isSuccess) {
-        // Wait for blockchain state to update
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        await refetchLeaderboard();
-
-        setGameState((prev) => ({
-          ...prev,
-          submissionStatus: {
-            success: true,
-            message: "Score submitted successfully!",
-            showLeaderboard: true,
-          },
-        }));
-      }
     } catch (error) {
       console.error("Failed to submit score:", error);
       setGameState((prev) => ({
         ...prev,
         submissionStatus: {
           success: false,
-          message: "Failed to submit score. Please try again.",
+          message: "An error occurred. Please try again.",
           showLeaderboard: false,
         },
       }));
+    } finally {
+      setCompletionState((prev) => ({ ...prev, isSubmitting: false }));
     }
   };
 
@@ -408,7 +535,7 @@ const MemoryGame: React.FC = () => {
     }
   }, [gameState.clicks, gameState.level, gameState.hints]);
 
-  // Add effect to handle matches
+  // Update the effect that handles matches
   useEffect(() => {
     const checkForMatch = async () => {
       const maxSelections = gameState.level === 1 ? 2 : 3;
@@ -416,7 +543,6 @@ const MemoryGame: React.FC = () => {
       if (gameState.selectedTiles.length === maxSelections) {
         setIsProcessingMatch(true);
 
-        // Check for match logic here
         const selectedValues = gameState.selectedTiles.map(
           (index) => gameState.tiles[index].value
         );
@@ -424,16 +550,25 @@ const MemoryGame: React.FC = () => {
           (val) => val === selectedValues[0]
         );
 
-        // Wait a bit to show the tiles
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
         setGameState((prev) => {
+          // Update wrong attempts if not a match
+          const newWrongAttempts = { ...prev.wrongAttempts };
+          if (!isMatch) {
+            prev.selectedTiles.forEach((tileIndex) => {
+              newWrongAttempts[tileIndex] =
+                (newWrongAttempts[tileIndex] || 0) + 1;
+            });
+          }
+
           const newTiles = prev.tiles.map((tile, index) => {
             if (prev.selectedTiles.includes(index)) {
               return {
                 ...tile,
                 revealed: isMatch,
                 matched: isMatch,
+                wrongAttempts: !isMatch ? newWrongAttempts[index] || 0 : 0,
               };
             }
             return tile;
@@ -453,15 +588,20 @@ const MemoryGame: React.FC = () => {
             tiles: newTiles,
             selectedTiles: [],
             clicks: prev.clicks + 1,
+            wrongAttempts: newWrongAttempts,
           };
         });
+
+        if (isMatch) {
+          setMatchCount((prev) => prev + 1);
+        }
 
         setIsProcessingMatch(false);
       }
     };
 
     checkForMatch();
-  }, [gameState.selectedTiles, gameState.level, handleLevelComplete]);
+  }, [gameState.selectedTiles]);
 
   // Render more specific and helpful hints
   const renderHints = () => {
@@ -535,121 +675,148 @@ const MemoryGame: React.FC = () => {
     return null;
   };
 
-  // Update the handleCelebrationActions to include penguin art
+  // Update the celebration modal content
   const handleCelebrationActions = () => {
-    // Check current score against leaderboard
-    const currentLeaderboard = leaderboards[
-      gameState.level - 1
-    ] as LeaderboardData;
+    const currentLeaderboard = leaderboards[gameState.level - 1];
     const currentBestScore = currentLeaderboard?.data?.find(
-      (entry: LeaderboardEntry) =>
-        entry.player.toLowerCase() === (account?.toLowerCase() ?? "")
+      (entry) => entry.player.toLowerCase() === (account?.toLowerCase() ?? "")
     );
 
-    const isBetterScore =
-      !currentBestScore || gameState.clicks < Number(currentBestScore.score);
+    const isPenguinCygaar = Math.random() > 0.5;
+    const penguinImage = isPenguinCygaar
+      ? "/images/penguin9.png"
+      : "/images/penguin10.png";
+    const penguinName = isPenguinCygaar ? "Cygaar" : "Luca";
 
     return (
-      <div className="space-y-4">
-        <div className="flex flex-col items-center mb-6">
-          <Image
-            src={`/images/penguin${gameState.level - 1}.png`}
-            alt="Celebration Penguin"
-            width={150}
-            height={150}
-            className="animate-bounce-gentle mb-4"
-            priority
-          />
-          <p className="text-xl">
-            You completed the level in {gameState.clicks} clicks!
-          </p>
-        </div>
-
-        {isBetterScore ? (
-          <button
-            id="submit-score-btn"
-            onClick={handleSubmitScore}
-            className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 transition-colors"
-          >
-            Submit Score to Leaderboard
-          </button>
-        ) : (
-          <div className="text-center">
-            <p className="text-gray-600 italic">
-              Your current score ({gameState.clicks} clicks) isn&apos;t better
-              than your previous best ({Number(currentBestScore?.score)}{" "}
-              clicks).
+      <div className="max-w-md w-full mx-auto">
+        <div className="bg-white p-8 rounded-xl shadow-lg">
+          {/* Header */}
+          <div className="flex flex-col items-center mb-6">
+            <Image
+              src={penguinImage}
+              alt={penguinName}
+              width={150}
+              height={150}
+              className="animate-bounce-gentle mb-4"
+              priority
+            />
+            <h2 className="text-2xl font-bold">
+              Level {gameState.level} Complete!
+            </h2>
+            <p className="text-lg mt-2">
+              {isPenguinCygaar
+                ? `${gameState.clicks} clicks? ${
+                    gameState.clicks < 20 ? "not bad anon" : "ngmi ser"
+                  }`
+                : `Great job! You completed it in ${gameState.clicks} clicks!`}
             </p>
-            <p className="text-gray-600 font-medium mt-2">
-              Keep trying to improve!
-            </p>
+            {currentBestScore && (
+              <p className="text-sm text-gray-600 mt-2">
+                Your current best: {Number(currentBestScore.score)} clicks
+              </p>
+            )}
           </div>
-        )}
 
-        <div className="flex gap-2 mt-4">
-          <button
-            onClick={handleRetryLevel}
-            className="flex-1 bg-gray-200 py-2 px-4 rounded hover:bg-gray-300 transition-colors"
-          >
-            Retry Level
-          </button>
-          {gameState.level < 3 && (
-            <button
-              onClick={handleNextLevel}
-              className="flex-1 bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 transition-colors"
-            >
-              Next Level
-            </button>
+          {/* Action Buttons */}
+          {!completionState.showingOptions ? (
+            <div className="space-y-3">
+              <button
+                onClick={() =>
+                  setCompletionState((prev) => ({
+                    ...prev,
+                    showingOptions: true,
+                  }))
+                }
+                className="w-full bg-emerald-500 text-white py-3 px-4 rounded-lg hover:bg-emerald-600 transition-colors"
+              >
+                Submit Score to Leaderboard
+              </button>
+              <button
+                onClick={
+                  gameState.level < 3 ? handleNextLevel : handleRetryLevel
+                }
+                className="w-full bg-green-500 text-white py-3 px-4 rounded-lg hover:bg-green-600 transition-colors"
+              >
+                {gameState.level < 3 ? "Continue to Next Level" : "Play Again"}
+              </button>
+              <button
+                onClick={() =>
+                  setGameState((prev) => ({ ...prev, showLeaderboard: true }))
+                }
+                className="w-full bg-gray-200 py-3 px-4 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                View Leaderboards
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Score Submission Info */}
+              <div className="bg-emerald-50 p-4 rounded-lg">
+                <h3 className="font-bold mb-2">Submitting Your Score</h3>
+                <ol className="list-decimal list-inside space-y-2 text-sm">
+                  <li>First transaction: Activate game session</li>
+                  <li>Second transaction: Submit your score</li>
+                  <li>Leaderboard updates within ~1 minute</li>
+                </ol>
+                {currentBestScore && (
+                  <p className="mt-3 text-sm text-gray-600">
+                    Only your best scores appear on the leaderboard.
+                    {Number(currentBestScore.score) > gameState.clicks &&
+                      " This score will improve your ranking!"}
+                  </p>
+                )}
+              </div>
+
+              {/* Submission Status */}
+              {gameState.submissionStatus && (
+                <div
+                  className={`p-4 rounded-lg ${
+                    gameState.submissionStatus.success
+                      ? "bg-green-50"
+                      : "bg-red-50"
+                  }`}
+                >
+                  <p
+                    className={
+                      gameState.submissionStatus.success
+                        ? "text-green-700"
+                        : "text-red-700"
+                    }
+                  >
+                    {gameState.submissionStatus.message}
+                  </p>
+                </div>
+              )}
+
+              {/* Submit/Back Buttons */}
+              <div className="space-y-3">
+                <button
+                  onClick={handleSubmitScore}
+                  disabled={completionState.isSubmitting}
+                  className="w-full bg-emerald-500 text-white py-3 px-4 rounded-lg hover:bg-emerald-600 transition-colors disabled:bg-emerald-300"
+                >
+                  {completionState.isSubmitting
+                    ? "Processing..."
+                    : "Submit Score"}
+                </button>
+                <button
+                  onClick={() =>
+                    setCompletionState((prev) => ({
+                      ...prev,
+                      showingOptions: false,
+                    }))
+                  }
+                  className="w-full bg-gray-200 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                  Back
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
     );
-  };
-
-  // Add level management functions
-  const handleRetryLevel = () => {
-    setGameState((prev) => ({
-      ...prev,
-      showCelebration: false,
-      gameStarted: false,
-      clicks: 0,
-      tiles: [],
-      selectedTiles: [],
-      submissionStatus: undefined,
-    }));
-    setTimeout(() => {
-      setGameState((prev) => ({
-        ...prev,
-        gameStarted: true,
-      }));
-    }, 100);
-  };
-
-  const handleNextLevel = () => {
-    if (gameState.level >= 3) return;
-
-    setGameState((prev) => ({
-      ...prev,
-      level: prev.level + 1,
-      showCelebration: false,
-      gameStarted: false,
-      clicks: 0,
-      tiles: [],
-      selectedTiles: [],
-      submissionStatus: undefined,
-      hints: {
-        showPatternHint: false,
-        showMatchingHint: false,
-        showTripletHint: false,
-        showLevel3Hint: false,
-      },
-    }));
-    setTimeout(() => {
-      setGameState((prev) => ({
-        ...prev,
-        gameStarted: true,
-      }));
-    }, 100);
   };
 
   if (!isConnected) {
@@ -670,6 +837,21 @@ const MemoryGame: React.FC = () => {
 
   return (
     <div className="game-container">
+      <NetworkCheck />
+
+      {gameState.gameStarted && (
+        <>
+          <div className="mb-4">
+            <MiniLeaderboard level={gameState.level} />
+          </div>
+          <CommentaryOverlay
+            clicks={gameState.clicks}
+            level={gameState.level}
+            matches={matchCount}
+          />
+        </>
+      )}
+
       <div className="game-info">
         <h2 className="text-2xl font-bold mb-2">Level {gameState.level}</h2>
         <div className="mb-2">Clicks: {gameState.clicks}</div>
@@ -684,7 +866,7 @@ const MemoryGame: React.FC = () => {
           <>
             <button
               onClick={handleStartGame}
-              className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors mb-4"
+              className="px-6 py-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors mb-4"
             >
               Start Game
             </button>
@@ -698,17 +880,32 @@ const MemoryGame: React.FC = () => {
           className="game-grid"
           style={{
             gridTemplateColumns: `repeat(${
-              gameState.level === 1 ? 4 : 6
+              LEVEL_CONFIG[gameState.level as GameLevel].cols
             }, minmax(0, 1fr))`,
+            width: "100%",
+            maxWidth: "800px",
+            margin: "0 auto",
           }}
         >
           {gameState.tiles.map((tile: Tile, index: number) => (
             <div
               key={tile.id}
               onClick={() => handleTileClick(index)}
-              className={`game-tile ${
-                tile.revealed || tile.matched ? "revealed" : ""
-              } ${tile.matched ? "matched" : ""}`}
+              data-wrong-attempts={gameState.wrongAttempts[index] || 0}
+              className={`game-tile 
+                ${tile.revealed || tile.matched ? "revealed" : ""} 
+                ${tile.matched ? "matched" : ""}
+                ${
+                  !tile.matched && gameState.wrongAttempts[index] > 2
+                    ? "animate-wrong-match-severe"
+                    : ""
+                }
+                ${
+                  !tile.matched && gameState.wrongAttempts[index] === 2
+                    ? "animate-wrong-match"
+                    : ""
+                }
+              `}
             >
               {(tile.revealed || tile.matched) && (
                 <Image
@@ -743,7 +940,7 @@ const MemoryGame: React.FC = () => {
               onClick={() =>
                 setGameState((prev) => ({ ...prev, showYeti: false }))
               }
-              className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              className="px-6 py-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
             >
               Continue Playing
             </button>
@@ -753,62 +950,15 @@ const MemoryGame: React.FC = () => {
 
       {gameState.showCelebration && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
-            <div className="text-center">
-              <Image
-                src={`/images/penguin${gameState.level - 1}.png`}
-                alt="Celebration Penguin"
-                width={150}
-                height={150}
-                className="animate-bounce-gentle mx-auto mb-4"
-                priority
-              />
-              <h2 className="text-2xl font-bold mb-4">
-                Level {gameState.level} Complete!
-              </h2>
-            </div>
-
-            {gameState.submissionStatus ? (
-              <>
-                <p
-                  className={`mb-4 text-center ${
-                    gameState.submissionStatus.success
-                      ? "text-green-600"
-                      : "text-red-600"
-                  }`}
-                >
-                  {gameState.submissionStatus.message}
-                </p>
-                {gameState.submissionStatus.showLeaderboard && (
-                  <div className="mb-4">
-                    <LeaderboardDisplay refreshKey={gameState.leaderboardKey} />
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleRetryLevel}
-                    className="flex-1 bg-gray-200 py-2 px-4 rounded hover:bg-gray-300 transition-colors"
-                  >
-                    Retry Level
-                  </button>
-                  {gameState.level < 3 && (
-                    <button
-                      onClick={handleNextLevel}
-                      className="flex-1 bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 transition-colors"
-                    >
-                      Next Level
-                    </button>
-                  )}
-                </div>
-              </>
-            ) : (
-              handleCelebrationActions()
-            )}
-          </div>
+          {handleCelebrationActions()}
         </div>
       )}
 
       {renderHints()}
+
+      <div className="mt-8">
+        <MusicPlayer />
+      </div>
     </div>
   );
 };
