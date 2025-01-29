@@ -194,8 +194,6 @@ const MemoryGame: React.FC = () => {
 
     setGameState((prev) => ({
       ...prev,
-      gameStarted: true,
-      clicks: 0,
       tiles: initialTiles,
       selectedTiles: [],
     }));
@@ -205,7 +203,7 @@ const MemoryGame: React.FC = () => {
     if (gameState.gameStarted) {
       initializeGame();
     }
-  }, [gameState.gameStarted, initializeGame, gameState]);
+  }, [gameState.gameStarted, initializeGame]);
 
   const handleStartGame = () => {
     try {
@@ -252,124 +250,54 @@ const MemoryGame: React.FC = () => {
     async (index: number) => {
       if (isProcessingMatch) return;
 
-      if (!gameState.tiles[index]) {
-        console.error("Invalid tile index:", index);
-        return;
-      }
+      // Get current state values to avoid stale closures
+      setGameState((prev) => {
+        if (!prev.tiles[index]) {
+          console.error("Invalid tile index:", index);
+          return prev;
+        }
 
-      if (gameState.tiles[index].matched || gameState.tiles[index].revealed)
-        return;
+        if (prev.tiles[index].matched || prev.tiles[index].revealed) {
+          return prev;
+        }
 
-      // Handle yeti click
-      if (gameState.tiles[index].value === 8) {
-        setGameState((prev) => ({
-          ...prev,
-          tiles: prev.tiles.map((tile, i) =>
-            i === index ? { ...tile, revealed: true } : tile
-          ),
-          showYeti: true,
-        }));
-
-        setTimeout(() => {
-          setGameState((prev) => ({
+        // Handle yeti click
+        if (prev.tiles[index].value === 8) {
+          const newState = {
             ...prev,
             tiles: prev.tiles.map((tile, i) =>
-              i === index ? { ...tile, revealed: false } : tile
+              i === index ? { ...tile, revealed: true } : tile
             ),
-            showYeti: false,
-          }));
-        }, 1500);
-        return;
-      }
+            showYeti: true,
+          };
 
-      // Different max selections based on level
-      const maxSelections = gameState.level === 1 ? 2 : 3;
-      if (gameState.selectedTiles.length >= maxSelections) return;
+          setTimeout(() => {
+            setGameState((current) => ({
+              ...current,
+              tiles: current.tiles.map((tile, i) =>
+                i === index ? { ...tile, revealed: false } : tile
+              ),
+              showYeti: false,
+            }));
+          }, 1500);
 
-      if (gameState.selectedTiles.includes(index)) return;
+          return newState;
+        }
 
-      setGameState((prev) => {
+        // Update tiles and selected tiles
         const newTiles = prev.tiles.map((tile, i) =>
           i === index ? { ...tile, revealed: true } : tile
         );
         const newSelectedTiles = [...prev.selectedTiles, index];
 
-        // Check for matches when we have enough selections
-        if (newSelectedTiles.length === maxSelections) {
-          setIsProcessingMatch(true);
-
-          setTimeout(() => {
-            setGameState((current) => {
-              const selectedTileValues = newSelectedTiles.map(
-                (idx) => current.tiles[idx].value
-              );
-
-              // Check if all selected tiles have the same value
-              const isMatch = selectedTileValues.every(
-                (val) => val === selectedTileValues[0]
-              );
-
-              const updatedTiles = current.tiles.map((tile, i) => {
-                if (newSelectedTiles.includes(i)) {
-                  return {
-                    ...tile,
-                    matched: isMatch,
-                    revealed: isMatch,
-                  };
-                }
-                return tile;
-              });
-
-              // For level 3, check if all groups are complete
-              const allMatched = updatedTiles.every((tile) => {
-                if (tile.value === 8) return true; // Yetis are always "matched"
-                if (gameState.level === 3) {
-                  // Count how many of this type are matched
-                  const matchedOfType = updatedTiles.filter(
-                    (t) => t.value === tile.value && t.matched
-                  ).length;
-                  // Count total of this type
-                  const totalOfType = updatedTiles.filter(
-                    (t) => t.value === tile.value
-                  ).length;
-                  return matchedOfType === totalOfType;
-                }
-                return tile.matched;
-              });
-
-              if (allMatched) {
-                setTimeout(() => {
-                  handleLevelComplete();
-                }, 500);
-              }
-
-              return {
-                ...current,
-                tiles: updatedTiles,
-                selectedTiles: [],
-                clicks: current.clicks + 1,
-              };
-            });
-
-            setIsProcessingMatch(false);
-          }, 1000);
-        }
-
         return {
           ...prev,
           tiles: newTiles,
           selectedTiles: newSelectedTiles,
-          clicks: prev.clicks + (newSelectedTiles.length === 1 ? 1 : 0),
         };
       });
     },
-    [
-      isProcessingMatch,
-      handleLevelComplete,
-      gameState.level,
-      gameState.selectedTiles,
-      gameState.tiles,
-    ]
+    [isProcessingMatch] // Only depend on processing state
   );
 
   // Update the score submission logic with proper types
@@ -479,6 +407,61 @@ const MemoryGame: React.FC = () => {
       }
     }
   }, [gameState.clicks, gameState.level, gameState.hints]);
+
+  // Add effect to handle matches
+  useEffect(() => {
+    const checkForMatch = async () => {
+      const maxSelections = gameState.level === 1 ? 2 : 3;
+
+      if (gameState.selectedTiles.length === maxSelections) {
+        setIsProcessingMatch(true);
+
+        // Check for match logic here
+        const selectedValues = gameState.selectedTiles.map(
+          (index) => gameState.tiles[index].value
+        );
+        const isMatch = selectedValues.every(
+          (val) => val === selectedValues[0]
+        );
+
+        // Wait a bit to show the tiles
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        setGameState((prev) => {
+          const newTiles = prev.tiles.map((tile, index) => {
+            if (prev.selectedTiles.includes(index)) {
+              return {
+                ...tile,
+                revealed: isMatch,
+                matched: isMatch,
+              };
+            }
+            return tile;
+          });
+
+          // Check if level is complete
+          const allMatched = newTiles.every(
+            (tile) => tile.matched || tile.value === 8
+          );
+
+          if (allMatched) {
+            setTimeout(() => handleLevelComplete(), 500);
+          }
+
+          return {
+            ...prev,
+            tiles: newTiles,
+            selectedTiles: [],
+            clicks: prev.clicks + 1,
+          };
+        });
+
+        setIsProcessingMatch(false);
+      }
+    };
+
+    checkForMatch();
+  }, [gameState.selectedTiles, gameState.level, handleLevelComplete]);
 
   // Render more specific and helpful hints
   const renderHints = () => {
