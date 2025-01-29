@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-sky-200 min-h-screen;
+  }
+}
+
+@layer components {
+  .game-container {
+    @apply max-w-4xl mx-auto p-4;
+  }
+
+  .game-info {
+    @apply bg-white/80 rounded-xl shadow-lg p-6 text-center mb-8;
+  }
+
+  .game-grid {
+    @apply grid gap-4 mx-auto max-w-[800px];
+  }
+
+  .game-tile {
+    @apply relative aspect-square cursor-pointer transition-all duration-300;
+    background-image: url("/images/mound.png");
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+  }
+
+  .game-tile:hover {
+    @apply transform scale-110;
+    background-image: url("/images/mound_hover.png");
+  }
+
+  .game-tile.revealed {
+    background-image: none;
+    @apply bg-white/90 rounded-lg shadow-md;
+  }
+
+  .penguin-image {
+    @apply w-full h-full object-contain transition-opacity duration-300;
+  }
+
+  .penguin-image.matched {
+    @apply opacity-50;
+  }
+
+  .game-tile.matched {
+    animation: matchShake 0.5s ease-in-out, matchGlow 2s ease-in-out;
+    border: 2px solid #4ade80;
+    background-color: rgba(167, 243, 208, 0.1);
+  }
+}
+
+/* Animations */
+@keyframes bounce {
+  0%,
+  100% {
+    transform: translateY(-5%);
+  }
+  50% {
+    transform: translateY(0);
+  }
+}
+
+.animate-bounce-custom {
+  animation: bounce 1s infinite;
+}
+
+@keyframes matchShake {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-5deg);
+  }
+  75% {
+    transform: rotate(5deg);
+  }
+}
+
+@keyframes matchGlow {
+  0% {
+    box-shadow: 0 0 5px #4ade80;
+    background-color: rgba(255, 255, 255, 0.9);
+  }
+  50% {
+    box-shadow: 0 0 20px #4ade80;
+    background-color: rgba(167, 243, 208, 0.9);
+  }
+  100% {
+    box-shadow: 0 0 5px #4ade80;
+    background-color: rgba(255, 255, 255, 0.9);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .game-grid {
+    @apply gap-2 p-2;
+  }
+}
