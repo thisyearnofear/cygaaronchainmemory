@@ -205,7 +205,7 @@ const MemoryGame: React.FC = () => {
     if (gameState.gameStarted) {
       initializeGame();
     }
-  }, [gameState.gameStarted, initializeGame]);
+  }, [gameState.gameStarted, initializeGame, gameState]);
 
   const handleStartGame = () => {
     try {
@@ -363,7 +363,13 @@ const MemoryGame: React.FC = () => {
         };
       });
     },
-    [isProcessingMatch, handleLevelComplete, gameState.level]
+    [
+      isProcessingMatch,
+      handleLevelComplete,
+      gameState.level,
+      gameState.selectedTiles,
+      gameState.tiles,
+    ]
   );
 
   // Update the score submission logic with proper types
@@ -383,12 +389,20 @@ const MemoryGame: React.FC = () => {
       }
 
       await startGame(gameState.level);
-
       const tx = await submitScore([
         BigInt(gameState.level),
         BigInt(gameState.clicks),
         "0x" as const,
       ]);
+
+      setGameState((prev) => ({
+        ...prev,
+        submissionStatus: {
+          success: true,
+          message: "Submitting score to blockchain...",
+          showLeaderboard: false,
+        },
+      }));
 
       const receipt = await tx.wait();
       const status = receipt.status as TransactionStatus;
@@ -396,34 +410,16 @@ const MemoryGame: React.FC = () => {
         status === "success" || status === 1 || status === "0x1";
 
       if (isSuccess) {
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        // Wait for blockchain state to update
+        await new Promise((resolve) => setTimeout(resolve, 2000));
         await refetchLeaderboard();
-
-        // Type-safe leaderboard check
-        const currentLeaderboard = leaderboards[
-          gameState.level - 1
-        ] as LeaderboardData;
-        const betterScore = currentLeaderboard?.data?.some(
-          (entry: LeaderboardEntry) => Number(entry.score) === gameState.clicks
-        );
 
         setGameState((prev) => ({
           ...prev,
           submissionStatus: {
             success: true,
-            message: betterScore
-              ? "Congratulations! Your score was added to the leaderboard!"
-              : "Score submitted, but wasn't better than your previous best. Keep trying!",
+            message: "Score submitted successfully!",
             showLeaderboard: true,
-          },
-        }));
-      } else {
-        setGameState((prev) => ({
-          ...prev,
-          submissionStatus: {
-            success: false,
-            message: "Transaction failed. Please try again.",
-            showLeaderboard: false,
           },
         }));
       }
@@ -437,14 +433,6 @@ const MemoryGame: React.FC = () => {
           showLeaderboard: false,
         },
       }));
-    } finally {
-      const submitButton = document.getElementById(
-        "submit-score-btn"
-      ) as HTMLButtonElement | null;
-      if (submitButton) {
-        submitButton.disabled = false;
-        submitButton.textContent = "Submit Score to Leaderboard";
-      }
     }
   };
 
@@ -605,8 +593,9 @@ const MemoryGame: React.FC = () => {
         ) : (
           <div className="text-center">
             <p className="text-gray-600 italic">
-              Your current score ({gameState.clicks} clicks) isn't better than
-              your previous best ({Number(currentBestScore?.score)} clicks).
+              Your current score ({gameState.clicks} clicks) isn&apos;t better
+              than your previous best ({Number(currentBestScore?.score)}{" "}
+              clicks).
             </p>
             <p className="text-gray-600 font-medium mt-2">
               Keep trying to improve!
