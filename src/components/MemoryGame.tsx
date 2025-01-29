@@ -30,6 +30,11 @@ interface GameState {
   showCelebration: boolean;
   leaderboardKey?: number;
   hints: GameHints;
+  submissionStatus?: {
+    success: boolean;
+    message: string;
+    showLeaderboard: boolean;
+  };
 }
 
 // Define specific types for each level config
@@ -64,7 +69,17 @@ const LEVEL_CONFIG: {
   3: { rows: 5, cols: 6, groups: 6, yetis: 5 },
 } as const;
 
-// Add type for the receipt status
+// Move these type definitions outside
+type LeaderboardEntry = {
+  player: `0x${string}`;
+  score: bigint;
+};
+
+type LeaderboardData = {
+  level: number;
+  data?: readonly LeaderboardEntry[];
+};
+
 type TransactionStatus = "success" | "reverted" | 1 | "0x1";
 
 // Add type guard function
@@ -75,7 +90,11 @@ function isLevel2Config(
 }
 
 const MemoryGame: React.FC = () => {
-  const { isConnected } = useAccount();
+  // Move the hook inside the component
+  const { submitScore, refetchLeaderboard, startGame, leaderboards } =
+    usePenguinGameContract();
+
+  const { isConnected, address: account } = useAccount();
   const [gameState, setGameState] = useState<GameState>({
     level: 1,
     clicks: 0,
@@ -90,10 +109,15 @@ const MemoryGame: React.FC = () => {
       showTripletHint: false,
       showLevel3Hint: false,
     },
+    submissionStatus: {
+      success: false,
+      message: "",
+      showLeaderboard: false,
+    },
   });
 
-  const { submitScore, refetchLeaderboard, startGame } =
-    usePenguinGameContract();
+  // Add a loading state to prevent multiple clicks
+  const [isProcessingMatch, setIsProcessingMatch] = useState(false);
 
   const initializeGame = useCallback(() => {
     const config = LEVEL_CONFIG[gameState.level as keyof typeof LEVEL_CONFIG];
@@ -223,45 +247,29 @@ const MemoryGame: React.FC = () => {
     }
   };
 
-  const handleTileClick = async (index: number) => {
-    // Don't allow clicks if tile is already revealed/matched
-    if (gameState.tiles[index].revealed || gameState.tiles[index].matched) {
-      return;
-    }
+  // Improve the tile click handler
+  const handleTileClick = useCallback(
+    async (index: number) => {
+      if (isProcessingMatch) return;
 
-    // Update clicks
-    setGameState((prev) => ({
-      ...prev,
-      clicks: prev.clicks + 1,
-    }));
+      if (!gameState.tiles[index]) {
+        console.error("Invalid tile index:", index);
+        return;
+      }
 
-    // Handle yeti click
-    if (gameState.tiles[index].value === 8) {
-      const updatedTiles = [...gameState.tiles];
-      updatedTiles[index].revealed = true;
+      if (gameState.tiles[index].matched || gameState.tiles[index].revealed)
+        return;
 
-      setGameState((prev) => ({
-        ...prev,
-        tiles: updatedTiles,
-        showYeti: true,
-      }));
+      // Handle yeti click
+      if (gameState.tiles[index].value === 8) {
+        setGameState((prev) => ({
+          ...prev,
+          tiles: prev.tiles.map((tile, i) =>
+            i === index ? { ...tile, revealed: true } : tile
+          ),
+          showYeti: true,
+        }));
 
-      // For level 3, reset all progress on yeti encounter
-      if (gameState.level === 3) {
-        setTimeout(() => {
-          setGameState((prev) => ({
-            ...prev,
-            tiles: prev.tiles.map((tile) => ({
-              ...tile,
-              revealed: false,
-              matched: false,
-            })),
-            selectedTiles: [],
-            showYeti: false,
-          }));
-        }, 1500);
-      } else {
-        // Level 2 yeti behavior stays the same
         setTimeout(() => {
           setGameState((prev) => ({
             ...prev,
@@ -271,69 +279,94 @@ const MemoryGame: React.FC = () => {
             showYeti: false,
           }));
         }, 1500);
+        return;
       }
-      return;
-    }
 
-    // Reveal the clicked tile
-    const updatedTiles = [...gameState.tiles];
-    updatedTiles[index].revealed = true;
+      // Different max selections based on level
+      const maxSelections = gameState.level === 1 ? 2 : 3;
+      if (gameState.selectedTiles.length >= maxSelections) return;
 
-    // Add to selected tiles
-    const newSelectedTiles = [...gameState.selectedTiles, index];
+      if (gameState.selectedTiles.includes(index)) return;
 
-    // Check if we have a potential match
-    const selectedValues = newSelectedTiles.map(
-      (i) => gameState.tiles[i].value
-    );
-    const allSameValue = selectedValues.every((v) => v === selectedValues[0]);
+      setGameState((prev) => {
+        const newTiles = prev.tiles.map((tile, i) =>
+          i === index ? { ...tile, revealed: true } : tile
+        );
+        const newSelectedTiles = [...prev.selectedTiles, index];
 
-    // Find how many tiles should match for this group
-    const groupSize = gameState.tiles.filter(
-      (t) => t.value === gameState.tiles[index].value
-    ).length;
+        // Check for matches when we have enough selections
+        if (newSelectedTiles.length === maxSelections) {
+          setIsProcessingMatch(true);
 
-    setGameState((prev) => ({
-      ...prev,
-      tiles: updatedTiles,
-      selectedTiles: newSelectedTiles,
-    }));
+          setTimeout(() => {
+            setGameState((current) => {
+              const selectedTileValues = newSelectedTiles.map(
+                (idx) => current.tiles[idx].value
+              );
 
-    // Check for match if we've selected all tiles in the group
-    if (newSelectedTiles.length === groupSize) {
-      setTimeout(() => {
-        if (allSameValue) {
-          // It's a match!
-          setGameState((prev) => ({
-            ...prev,
-            tiles: prev.tiles.map((tile, i) =>
-              newSelectedTiles.includes(i) ? { ...tile, matched: true } : tile
-            ),
-            selectedTiles: [],
-          }));
+              // Check if all selected tiles have the same value
+              const isMatch = selectedTileValues.every(
+                (val) => val === selectedTileValues[0]
+              );
 
-          // Check if level is complete
-          const remainingUnmatched = updatedTiles.filter(
-            (t) => !t.matched && t.value !== 8
-          ).length;
+              const updatedTiles = current.tiles.map((tile, i) => {
+                if (newSelectedTiles.includes(i)) {
+                  return {
+                    ...tile,
+                    matched: isMatch,
+                    revealed: isMatch,
+                  };
+                }
+                return tile;
+              });
 
-          if (remainingUnmatched === groupSize) {
-            handleLevelComplete();
-          }
-        } else {
-          // No match, hide tiles
-          setGameState((prev) => ({
-            ...prev,
-            tiles: prev.tiles.map((tile, i) =>
-              newSelectedTiles.includes(i) ? { ...tile, revealed: false } : tile
-            ),
-            selectedTiles: [],
-          }));
+              // For level 3, check if all groups are complete
+              const allMatched = updatedTiles.every((tile) => {
+                if (tile.value === 8) return true; // Yetis are always "matched"
+                if (gameState.level === 3) {
+                  // Count how many of this type are matched
+                  const matchedOfType = updatedTiles.filter(
+                    (t) => t.value === tile.value && t.matched
+                  ).length;
+                  // Count total of this type
+                  const totalOfType = updatedTiles.filter(
+                    (t) => t.value === tile.value
+                  ).length;
+                  return matchedOfType === totalOfType;
+                }
+                return tile.matched;
+              });
+
+              if (allMatched) {
+                setTimeout(() => {
+                  handleLevelComplete();
+                }, 500);
+              }
+
+              return {
+                ...current,
+                tiles: updatedTiles,
+                selectedTiles: [],
+                clicks: current.clicks + 1,
+              };
+            });
+
+            setIsProcessingMatch(false);
+          }, 1000);
         }
-      }, 1000);
-    }
-  };
 
+        return {
+          ...prev,
+          tiles: newTiles,
+          selectedTiles: newSelectedTiles,
+          clicks: prev.clicks + (newSelectedTiles.length === 1 ? 1 : 0),
+        };
+      });
+    },
+    [isProcessingMatch, handleLevelComplete, gameState.level]
+  );
+
+  // Update the score submission logic with proper types
   const handleSubmitScore = async () => {
     if (gameState.clicks < 8) {
       alert("Score too low - minimum 8 clicks required per level");
@@ -349,54 +382,61 @@ const MemoryGame: React.FC = () => {
         submitButton.textContent = "Submitting Score...";
       }
 
-      // First start the game session
-      console.log("Starting game session...");
       await startGame(gameState.level);
-      console.log("Game session started");
 
-      // Then submit the score
-      console.log("Starting score submission...");
       const tx = await submitScore([
         BigInt(gameState.level),
         BigInt(gameState.clicks),
         "0x" as const,
       ]);
 
-      console.log("Waiting for transaction confirmation...");
       const receipt = await tx.wait();
-
-      // Type-safe status check
       const status = receipt.status as TransactionStatus;
       const isSuccess =
         status === "success" || status === 1 || status === "0x1";
 
       if (isSuccess) {
-        console.log(
-          "Transaction successful, waiting for leaderboard update..."
-        );
-
-        // Wait longer for the blockchain state to update
-        await new Promise((resolve) => setTimeout(resolve, 5000)); // Increased to 5 seconds
-
-        // Force a refresh
+        await new Promise((resolve) => setTimeout(resolve, 5000));
         await refetchLeaderboard();
 
-        console.log("Score submitted successfully!");
-        alert(
-          "Score submitted successfully! Check the leaderboard to see your position."
+        // Type-safe leaderboard check
+        const currentLeaderboard = leaderboards[
+          gameState.level - 1
+        ] as LeaderboardData;
+        const betterScore = currentLeaderboard?.data?.some(
+          (entry: LeaderboardEntry) => Number(entry.score) === gameState.clicks
         );
-      } else {
-        console.error("Transaction failed:", receipt);
-        alert("Failed to submit score to leaderboard.");
-      }
 
-      setGameState((prev) => ({
-        ...prev,
-        leaderboardKey: (prev.leaderboardKey || 0) + 1,
-      }));
+        setGameState((prev) => ({
+          ...prev,
+          submissionStatus: {
+            success: true,
+            message: betterScore
+              ? "Congratulations! Your score was added to the leaderboard!"
+              : "Score submitted, but wasn't better than your previous best. Keep trying!",
+            showLeaderboard: true,
+          },
+        }));
+      } else {
+        setGameState((prev) => ({
+          ...prev,
+          submissionStatus: {
+            success: false,
+            message: "Transaction failed. Please try again.",
+            showLeaderboard: false,
+          },
+        }));
+      }
     } catch (error) {
       console.error("Failed to submit score:", error);
-      alert("Failed to submit score. Please try again.");
+      setGameState((prev) => ({
+        ...prev,
+        submissionStatus: {
+          success: false,
+          message: "Failed to submit score. Please try again.",
+          showLeaderboard: false,
+        },
+      }));
     } finally {
       const submitButton = document.getElementById(
         "submit-score-btn"
@@ -498,7 +538,7 @@ const MemoryGame: React.FC = () => {
         <div className="mt-4 space-y-2">
           {gameState.hints.showPatternHint && (
             <div className="bg-blue-100 p-3 rounded-lg text-sm animate-fade-in">
-              <span className="font-bold">💡 Level 3 Tip:</span> Each group can
+              <span className="font-bold">Level 3 Tip:</span> Each group can
               have 2-4 matching penguins. Pay attention to how many matches you
               need!
             </div>
@@ -522,6 +562,122 @@ const MemoryGame: React.FC = () => {
       );
     }
     return null;
+  };
+
+  // Update the handleCelebrationActions to include penguin art
+  const handleCelebrationActions = () => {
+    // Check current score against leaderboard
+    const currentLeaderboard = leaderboards[
+      gameState.level - 1
+    ] as LeaderboardData;
+    const currentBestScore = currentLeaderboard?.data?.find(
+      (entry: LeaderboardEntry) =>
+        entry.player.toLowerCase() === (account?.toLowerCase() ?? "")
+    );
+
+    const isBetterScore =
+      !currentBestScore || gameState.clicks < Number(currentBestScore.score);
+
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-col items-center mb-6">
+          <Image
+            src={`/images/penguin${gameState.level - 1}.png`}
+            alt="Celebration Penguin"
+            width={150}
+            height={150}
+            className="animate-bounce-gentle mb-4"
+            priority
+          />
+          <p className="text-xl">
+            You completed the level in {gameState.clicks} clicks!
+          </p>
+        </div>
+
+        {isBetterScore ? (
+          <button
+            id="submit-score-btn"
+            onClick={handleSubmitScore}
+            className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 transition-colors"
+          >
+            Submit Score to Leaderboard
+          </button>
+        ) : (
+          <div className="text-center">
+            <p className="text-gray-600 italic">
+              Your current score ({gameState.clicks} clicks) isn't better than
+              your previous best ({Number(currentBestScore?.score)} clicks).
+            </p>
+            <p className="text-gray-600 font-medium mt-2">
+              Keep trying to improve!
+            </p>
+          </div>
+        )}
+
+        <div className="flex gap-2 mt-4">
+          <button
+            onClick={handleRetryLevel}
+            className="flex-1 bg-gray-200 py-2 px-4 rounded hover:bg-gray-300 transition-colors"
+          >
+            Retry Level
+          </button>
+          {gameState.level < 3 && (
+            <button
+              onClick={handleNextLevel}
+              className="flex-1 bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 transition-colors"
+            >
+              Next Level
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Add level management functions
+  const handleRetryLevel = () => {
+    setGameState((prev) => ({
+      ...prev,
+      showCelebration: false,
+      gameStarted: false,
+      clicks: 0,
+      tiles: [],
+      selectedTiles: [],
+      submissionStatus: undefined,
+    }));
+    setTimeout(() => {
+      setGameState((prev) => ({
+        ...prev,
+        gameStarted: true,
+      }));
+    }, 100);
+  };
+
+  const handleNextLevel = () => {
+    if (gameState.level >= 3) return;
+
+    setGameState((prev) => ({
+      ...prev,
+      level: prev.level + 1,
+      showCelebration: false,
+      gameStarted: false,
+      clicks: 0,
+      tiles: [],
+      selectedTiles: [],
+      submissionStatus: undefined,
+      hints: {
+        showPatternHint: false,
+        showMatchingHint: false,
+        showTripletHint: false,
+        showLevel3Hint: false,
+      },
+    }));
+    setTimeout(() => {
+      setGameState((prev) => ({
+        ...prev,
+        gameStarted: true,
+      }));
+    }, 100);
   };
 
   if (!isConnected) {
@@ -625,45 +781,57 @@ const MemoryGame: React.FC = () => {
 
       {gameState.showCelebration && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-8 rounded-lg text-center">
-            <Image
-              src="/images/penguin9.png"
-              alt="Celebration"
-              width={150}
-              height={150}
-              className="animate-bounce-custom mx-auto mb-4"
-              priority
-            />
-            <h3 className="text-3xl font-bold text-green-500 mb-4">
-              Level Complete!
-            </h3>
-            <p className="text-xl mb-4">
-              You completed level {gameState.level} in {gameState.clicks}{" "}
-              clicks!
-            </p>
-            <div className="space-y-4">
-              <button
-                onClick={handleSubmitScore}
-                id="submit-score-btn"
-                className="w-full px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Submit Score to Leaderboard
-              </button>
-
-              <button
-                onClick={() => {
-                  setGameState((prev) => ({
-                    ...prev,
-                    level: Math.min(prev.level + 1, 3),
-                    gameStarted: false,
-                    showCelebration: false,
-                  }));
-                }}
-                className="w-full px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-              >
-                {gameState.level < 3 ? "Continue to Next Level" : "Play Again"}
-              </button>
+          <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
+            <div className="text-center">
+              <Image
+                src={`/images/penguin${gameState.level - 1}.png`}
+                alt="Celebration Penguin"
+                width={150}
+                height={150}
+                className="animate-bounce-gentle mx-auto mb-4"
+                priority
+              />
+              <h2 className="text-2xl font-bold mb-4">
+                Level {gameState.level} Complete!
+              </h2>
             </div>
+
+            {gameState.submissionStatus ? (
+              <>
+                <p
+                  className={`mb-4 text-center ${
+                    gameState.submissionStatus.success
+                      ? "text-green-600"
+                      : "text-red-600"
+                  }`}
+                >
+                  {gameState.submissionStatus.message}
+                </p>
+                {gameState.submissionStatus.showLeaderboard && (
+                  <div className="mb-4">
+                    <LeaderboardDisplay refreshKey={gameState.leaderboardKey} />
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleRetryLevel}
+                    className="flex-1 bg-gray-200 py-2 px-4 rounded hover:bg-gray-300 transition-colors"
+                  >
+                    Retry Level
+                  </button>
+                  {gameState.level < 3 && (
+                    <button
+                      onClick={handleNextLevel}
+                      className="flex-1 bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 transition-colors"
+                    >
+                      Next Level
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              handleCelebrationActions()
+            )}
           </div>
         </div>
       )}

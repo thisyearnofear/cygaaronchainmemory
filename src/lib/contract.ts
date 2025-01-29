@@ -186,6 +186,17 @@ export function usePenguinGameContract() {
     args: [bigint, bigint, `0x${string}`]
   ): Promise<WagmiTransaction> => {
     try {
+      console.log("Current leaderboard scores:", {
+        level: Number(args[0]),
+        newScore: Number(args[1]),
+        existingScores: leaderboards[Number(args[0]) - 1]?.data?.map(
+          (entry) => ({
+            player: entry.player,
+            score: Number(entry.score),
+          })
+        ),
+      });
+
       console.log("Submitting score:", {
         level: Number(args[0]),
         clicks: Number(args[1]),

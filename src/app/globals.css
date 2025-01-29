@@ -112,6 +112,20 @@
   animation: fadeIn 0.5s ease-out forwards;
 }
 
+@keyframes bounce-gentle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-bounce-gentle {
+  animation: bounce-gentle 2s infinite ease-in-out;
+}
+
 /* Responsive */
 @media (max-width: 640px) {
   .game-grid {
