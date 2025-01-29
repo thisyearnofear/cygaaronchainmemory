@@ -409,45 +409,21 @@ const MemoryGame: React.FC = () => {
 
   // Check clicks and progressively show hints
   useEffect(() => {
-    if (gameState.level === 2) {
-      if (gameState.clicks >= 75 && !gameState.hints.showPatternHint) {
-        setGameState((prev) => ({
-          ...prev,
-          hints: { ...prev.hints, showPatternHint: true },
-        }));
-      }
-      if (gameState.clicks >= 90 && !gameState.hints.showMatchingHint) {
-        setGameState((prev) => ({
-          ...prev,
-          hints: { ...prev.hints, showMatchingHint: true },
-        }));
-      }
-      if (gameState.clicks >= 105 && !gameState.hints.showTripletHint) {
-        setGameState((prev) => ({
-          ...prev,
-          hints: { ...prev.hints, showTripletHint: true },
-        }));
-      }
-    }
-  }, [gameState.clicks, gameState.level]);
+    const { showMatchingHint, showPatternHint, showTripletHint } =
+      gameState.hints;
 
-  // Update hint system
-  useEffect(() => {
-    if (gameState.level === 3) {
-      if (gameState.clicks >= 75 && !gameState.hints.showPatternHint) {
-        setGameState((prev) => ({
-          ...prev,
-          hints: { ...prev.hints, showPatternHint: true },
-        }));
-      }
-      if (gameState.clicks >= 90 && !gameState.hints.showLevel3Hint) {
-        setGameState((prev) => ({
-          ...prev,
-          hints: { ...prev.hints, showLevel3Hint: true },
-        }));
-      }
+    if (showMatchingHint) {
+      // ... hint logic
     }
-  }, [gameState.clicks, gameState.level]);
+  }, [gameState.hints]); // Depend on the entire hints object
+
+  useEffect(() => {
+    const { showLevel3Hint, showPatternHint } = gameState.hints;
+
+    if (showLevel3Hint) {
+      // ... hint logic
+    }
+  }, [gameState.hints]); // Depend on the entire hints object
 
   // Render more specific and helpful hints
   const renderHints = () => {

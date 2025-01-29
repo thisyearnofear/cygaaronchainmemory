@@ -243,7 +243,7 @@ export function usePenguinGameContract() {
           return receipt as TransactionReceipt;
         },
       };
-    } catch (error: any) {
+    } catch (error) {
       console.error("Score submission error:", error);
       handleError(error as ErrorWithMessage);
     }
