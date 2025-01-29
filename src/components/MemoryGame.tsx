@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { usePenguinGameContract } from "@/lib/contract";
-import { keccak256, toBytes } from "viem";
 import Image from "next/image";
 import { useAccount } from "wagmi";
 import LeaderboardDisplay from "./LeaderboardDisplay";
@@ -14,6 +13,13 @@ interface Tile {
   matched: boolean;
 }
 
+type GameHints = {
+  showPatternHint: boolean;
+  showMatchingHint: boolean;
+  showTripletHint: boolean;
+  showLevel3Hint: boolean;
+};
+
 interface GameState {
   level: number;
   clicks: number;
@@ -23,12 +29,7 @@ interface GameState {
   showYeti: boolean;
   showCelebration: boolean;
   leaderboardKey?: number;
-  hints: {
-    showPatternHint: boolean;
-    showMatchingHint: boolean;
-    showTripletHint: boolean;
-    showLevel3Hint: boolean;
-  };
+  hints: GameHints;
 }
 
 // Define specific types for each level config
@@ -409,21 +410,47 @@ const MemoryGame: React.FC = () => {
 
   // Check clicks and progressively show hints
   useEffect(() => {
-    const { showMatchingHint, showPatternHint, showTripletHint } =
-      gameState.hints;
-
-    if (showMatchingHint) {
-      // ... hint logic
+    if (gameState.level === 2) {
+      const { hints, clicks } = gameState;
+      if (clicks >= 75 && !hints.showPatternHint) {
+        setGameState((prev) => ({
+          ...prev,
+          hints: { ...prev.hints, showPatternHint: true },
+        }));
+      }
+      if (clicks >= 90 && !hints.showMatchingHint) {
+        setGameState((prev) => ({
+          ...prev,
+          hints: { ...prev.hints, showMatchingHint: true },
+        }));
+      }
+      if (clicks >= 105 && !hints.showTripletHint) {
+        setGameState((prev) => ({
+          ...prev,
+          hints: { ...prev.hints, showTripletHint: true },
+        }));
+      }
     }
-  }, [gameState.hints]); // Depend on the entire hints object
+  }, [gameState.clicks, gameState.level, gameState.hints]);
 
+  // Update hint system for level 3
   useEffect(() => {
-    const { showLevel3Hint, showPatternHint } = gameState.hints;
-
-    if (showLevel3Hint) {
-      // ... hint logic
+    if (gameState.level === 3) {
+      const { hints, clicks } = gameState;
+      if (clicks >= 75 && !hints.showPatternHint) {
+        setGameState((prev) => ({
+          ...prev,
+          hints: { ...prev.hints, showPatternHint: true },
+        }));
+      }
+      if (clicks >= 90 && !hints.showLevel3Hint) {
+        setGameState((prev) => ({
+          ...prev,
+          hints: { ...prev.hints, showLevel3Hint: true },
+        }));
+      }
     }
-  }, [gameState.hints]); // Depend on the entire hints object
+  }, [gameState.clicks, gameState.level, gameState.hints]);
 
   // Render more specific and helpful hints
   const renderHints = () => {
@@ -453,12 +480,12 @@ const MemoryGame: React.FC = () => {
               row. Mark the positions mentally!
               {gameState.clicks >= 90 && (
                 <div className="mt-2 text-xs text-gray-600">
-                  <span className="font-bold">Quick Count:</span> You're looking
-                  for:
+                  <span className="font-bold">Quick Count:</span> You&apos;re
+                  looking for:
                   <ul className="list-disc list-inside mt-1">
                     <li>4 different penguin types (3 of each)</li>
                     <li>3 yetis to avoid</li>
-                    <li>Some filler penguins that don't match</li>
+                    <li>Some filler penguins that don&apos;t match</li>
                   </ul>
                 </div>
               )}
