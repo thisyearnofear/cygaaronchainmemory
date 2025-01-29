@@ -77,7 +77,6 @@ type ErrorWithMessage = Error & {
 export function usePenguinGameContract() {
   const { writeContractAsync } = useWriteContract();
   const [leaderboards, setLeaderboards] = useState<LeaderboardData[]>([]);
-  const { data: walletClient } = useWalletClient();
   const chainId = useChainId();
 
   const refreshLeaderboard = useCallback(async () => {

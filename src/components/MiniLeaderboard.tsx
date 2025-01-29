@@ -1,6 +1,6 @@
 import { usePenguinGameContract } from "@/lib/contract";
 import type { LeaderboardEntry } from "@/lib/contract";
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useEnsName } from "@/hooks/useEnsName";
 
 interface MiniLeaderboardProps {
@@ -16,7 +16,7 @@ const AddressDisplay = ({ address }: { address: string }) => {
   );
 };
 
-const MiniLeaderboard: React.FC<{ level: number }> = ({ level }) => {
+const MiniLeaderboard: React.FC<MiniLeaderboardProps> = ({ level }) => {
   const { leaderboards } = usePenguinGameContract();
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -32,7 +32,7 @@ const MiniLeaderboard: React.FC<{ level: number }> = ({ level }) => {
   const topThree = currentLeaderboard.data.slice(0, 3);
 
   return (
-    <div className="bg-white/90 p-2 rounded-lg shadow-sm text-center">
+    <div className="bg-white/90 p-2 rounded-lg shadow-sm text-center mb-4">
       <h3 className="text-sm font-semibold mb-1">Level {level} Top Scores</h3>
       {topThree && topThree.length > 0 ? (
         <div className="flex justify-center gap-4">

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { usePenguinGameContract } from "@/lib/contract";
 import Image from "next/image";
 import { useAccount } from "wagmi";
@@ -82,13 +82,6 @@ type LeaderboardEntry = {
   player: `0x${string}`;
   score: bigint;
 };
-
-type LeaderboardData = {
-  level: number;
-  data?: readonly LeaderboardEntry[];
-};
-
-type TransactionStatus = "success" | "reverted" | 1 | "0x1";
 
 // Add type guard function
 function isLevel2Config(
@@ -232,6 +225,9 @@ const MemoryGame: React.FC = () => {
     hasSubmitted: false,
   });
 
+  // Add a ref to track pending hide operations
+  const pendingHideRef = useRef<NodeJS.Timeout | null>(null);
+
   // Use the initialization hook
   useGameInitialization(gameState, setGameState);
 
@@ -332,6 +328,12 @@ const MemoryGame: React.FC = () => {
   }, []);
 
   const handleNoMatch = useCallback((selectedTiles: number[]) => {
+    // Clear any pending hide operations
+    if (pendingHideRef.current) {
+      clearTimeout(pendingHideRef.current);
+    }
+
+    // Update wrong attempts counter
     setGameState((prev) => {
       const newWrongAttempts = { ...prev.wrongAttempts };
       selectedTiles.forEach((index) => {
@@ -344,20 +346,32 @@ const MemoryGame: React.FC = () => {
       };
     });
 
-    setTimeout(() => {
+    // Hide tiles after a delay
+    pendingHideRef.current = setTimeout(() => {
       setGameState((prev) => ({
         ...prev,
         selectedTiles: [],
         tiles: prev.tiles.map((tile, index) => ({
           ...tile,
-          revealed: selectedTiles.includes(index) ? false : tile.revealed,
+          revealed: tile.matched ? true : false, // Keep matched tiles revealed
         })),
       }));
-    }, 1000);
+      pendingHideRef.current = null;
+    }, 800);
+  }, []);
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingHideRef.current) {
+        clearTimeout(pendingHideRef.current);
+      }
+    };
   }, []);
 
   // Update the handleTileClick logic for Level 3
   const handleTileClick = async (index: number) => {
+    // Don't allow clicks on matched or already selected tiles
     if (
       gameState.tiles[index].matched ||
       gameState.selectedTiles.includes(index)
@@ -365,7 +379,17 @@ const MemoryGame: React.FC = () => {
       return;
     }
 
-    // Increment clicks for every tile click
+    // Don't allow new selections while processing a no-match hide animation
+    if (pendingHideRef.current) {
+      return;
+    }
+
+    // For Level 1, don't allow more than 2 tiles to be revealed at once
+    if (gameState.level === 1 && gameState.selectedTiles.length >= 2) {
+      return;
+    }
+
+    // Increment clicks and reveal the tile
     setGameState((prev) => ({
       ...prev,
       clicks: prev.clicks + 1,
@@ -375,7 +399,7 @@ const MemoryGame: React.FC = () => {
       ),
     }));
 
-    // Handle yeti click - show animation immediately
+    // Handle yeti click
     if (gameState.tiles[index].value === 8) {
       setGameState((prev) => ({
         ...prev,
@@ -397,10 +421,8 @@ const MemoryGame: React.FC = () => {
       const allMatch = values.every((v) => v === values[0]);
 
       if (allMatch) {
-        // Handle successful match
         handleMatch(selectedTiles);
       } else {
-        // Handle failed match
         handleNoMatch(selectedTiles);
       }
     }
@@ -799,9 +821,7 @@ const MemoryGame: React.FC = () => {
 
       {gameState.gameStarted && (
         <>
-          <div className="mb-4">
-            <MiniLeaderboard level={gameState.level} />
-          </div>
+          <MiniLeaderboard level={gameState.level} />
           <CommentaryOverlay
             clicks={gameState.clicks}
             level={gameState.level}
