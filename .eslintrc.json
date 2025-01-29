@@ -5,10 +5,12 @@
       "error",
       {
         "argsIgnorePattern": "^_",
-        "varsIgnorePattern": "^_"
+        "varsIgnorePattern": "^_",
+        "ignoreRestSiblings": true
       }
     ],
-    "react-hooks/exhaustive-deps": "warn",
-    "react/no-unescaped-entities": "warn"
+    "react-hooks/exhaustive-deps": "error",
+    "react/no-unescaped-entities": "error",
+    "@typescript-eslint/no-explicit-any": "error"
   }
 }

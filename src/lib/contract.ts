@@ -1,6 +1,5 @@
 import { useReadContract, useWriteContract } from "wagmi";
-import { type TransactionReceipt } from "viem";
-import { keccak256, toUtf8Bytes } from "ethers";
+import { keccak256, type TransactionReceipt, stringToHex } from "viem";
 import { useEffect } from "react";
 
 const PENGUIN_GAME_ABI = [
@@ -61,20 +60,25 @@ type LeaderboardData = readonly LeaderboardEntry[];
 // Add type for the receipt status
 type TransactionStatus = "success" | "reverted" | 1 | "0x1";
 
+// Fix the any type
+type ErrorWithMessage = Error & {
+  message?: string;
+};
+
 export function usePenguinGameContract() {
   const { writeContractAsync } = useWriteContract();
 
   const startGame = async (level: number) => {
-    // Generate a random level hash
+    // Generate a random level hash using viem's utilities
     const levelHash = keccak256(
-      toUtf8Bytes(
+      stringToHex(
         JSON.stringify({
           level,
           timestamp: Date.now(),
           random: Math.random(),
         })
       )
-    ) as `0x${string}`;
+    );
 
     console.log("Starting game session...", { level, levelHash });
 
@@ -241,10 +245,7 @@ export function usePenguinGameContract() {
       };
     } catch (error: any) {
       console.error("Score submission error:", error);
-      if (error?.message?.includes("User denied")) {
-        throw new Error("Transaction rejected");
-      }
-      throw error;
+      handleError(error as ErrorWithMessage);
     }
   };
 
@@ -279,7 +280,8 @@ export function usePenguinGameContract() {
   };
 }
 
-function handleError(error: Error | null): never {
+// Use handleError in startGame and submitScore
+function handleError(error: ErrorWithMessage | null): never {
   if (!error) throw new Error("Unknown error");
 
   if (error.message?.includes("User denied")) {

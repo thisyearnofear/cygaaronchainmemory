@@ -68,7 +68,8 @@ async function resolveNameWithFallback(addr: string): Promise<NameResolution> {
 }
 
 export default function LeaderboardDisplay({
-  refreshKey: _,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  refreshKey: _refreshKey, // renamed to indicate intent
 }: {
   refreshKey?: number;
 }) {
