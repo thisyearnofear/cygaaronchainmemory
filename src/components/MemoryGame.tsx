@@ -428,7 +428,7 @@ const MemoryGame: React.FC = () => {
     }
   };
 
-  // Update handleSubmitScore to fix the argument format
+  // Update handleSubmitScore to refresh leaderboard after successful submission
   const handleSubmitScore = async () => {
     if (!account || completionState.isSubmitting) return;
 
@@ -436,12 +436,14 @@ const MemoryGame: React.FC = () => {
 
     try {
       await startGame(gameState.level);
-      // Fix: Pass score as array of arguments matching contract expectations
       await submitScore([
         BigInt(gameState.level),
         BigInt(gameState.clicks),
         "0x" as const,
       ]);
+
+      // Refresh leaderboard after successful submission
+      await refreshLeaderboard();
 
       setCompletionState((prev) => ({
         ...prev,
@@ -473,113 +475,72 @@ const MemoryGame: React.FC = () => {
     }
   };
 
-  // Check clicks and progressively show hints
+  // Add refreshLeaderboard when viewing leaderboards
+  const handleViewLeaderboards = useCallback(async () => {
+    try {
+      await refreshLeaderboard();
+      setGameState((prev) => ({
+        ...prev,
+        showLeaderboard: true,
+        leaderboardKey: Date.now(),
+      }));
+    } catch (error) {
+      console.error("Failed to refresh leaderboard:", error);
+    }
+  }, [refreshLeaderboard]);
+
+  // Update the hint effect
   useEffect(() => {
-    if (gameState.level === 2) {
-      const { hints, clicks } = gameState;
-      if (clicks >= 75 && !hints.showPatternHint) {
+    if (!gameState.gameStarted) return;
+
+    // Show pattern hint after 30 seconds
+    const patternTimer = setTimeout(() => {
+      if (gameState.clicks > 30) {
         setGameState((prev) => ({
           ...prev,
           hints: { ...prev.hints, showPatternHint: true },
         }));
       }
-      if (clicks >= 90 && !hints.showMatchingHint) {
+    }, 30000);
+
+    return () => clearTimeout(patternTimer);
+  }, [gameState.gameStarted, gameState.clicks, setGameState]);
+
+  // Update the matching hint effect
+  useEffect(() => {
+    if (!gameState.gameStarted) return;
+
+    // Show matching hint after 60 seconds
+    const matchingTimer = setTimeout(() => {
+      if (gameState.clicks > 60) {
         setGameState((prev) => ({
           ...prev,
           hints: { ...prev.hints, showMatchingHint: true },
         }));
       }
-      if (clicks >= 105 && !hints.showTripletHint) {
-        setGameState((prev) => ({
-          ...prev,
-          hints: { ...prev.hints, showTripletHint: true },
-        }));
-      }
-    }
-  }, [gameState.clicks, gameState.level, gameState.hints]);
+    }, 60000);
 
-  // Update hint system for level 3
+    return () => clearTimeout(matchingTimer);
+  }, [gameState.gameStarted, gameState.clicks, setGameState]);
+
+  // Update the completion check effect
   useEffect(() => {
-    if (gameState.level === 3) {
-      const { hints, clicks } = gameState;
-      if (clicks >= 75 && !hints.showPatternHint) {
-        setGameState((prev) => ({
-          ...prev,
-          hints: { ...prev.hints, showPatternHint: true },
-        }));
-      }
-      if (clicks >= 90 && !hints.showLevel3Hint) {
-        setGameState((prev) => ({
-          ...prev,
-          hints: { ...prev.hints, showLevel3Hint: true },
-        }));
-      }
+    if (!gameState.gameStarted || !gameState.tiles.length) return;
+
+    const matchableTiles = gameState.tiles.filter(
+      (tile) => tile.value !== 7 && tile.value !== 8
+    );
+    const allMatched = matchableTiles.every((tile) => tile.matched);
+
+    if (allMatched) {
+      handleLevelComplete();
     }
-  }, [gameState.clicks, gameState.level, gameState.hints]);
-
-  // Update the effect that handles matches
-  useEffect(() => {
-    const checkForMatch = async () => {
-      const maxSelections = gameState.level === 1 ? 2 : 3;
-
-      if (gameState.selectedTiles.length === maxSelections) {
-        const selectedValues = gameState.selectedTiles.map(
-          (index) => gameState.tiles[index].value
-        );
-        const isMatch = selectedValues.every(
-          (val) => val === selectedValues[0]
-        );
-
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        setGameState((prev) => {
-          // Update wrong attempts if not a match
-          const newWrongAttempts = { ...prev.wrongAttempts };
-          if (!isMatch) {
-            prev.selectedTiles.forEach((tileIndex) => {
-              newWrongAttempts[tileIndex] =
-                (newWrongAttempts[tileIndex] || 0) + 1;
-            });
-          }
-
-          const newTiles = prev.tiles.map((tile, index) => {
-            if (prev.selectedTiles.includes(index)) {
-              return {
-                ...tile,
-                revealed: isMatch,
-                matched: isMatch,
-                wrongAttempts: !isMatch ? newWrongAttempts[index] || 0 : 0,
-              };
-            }
-            return tile;
-          });
-
-          // Check if level is complete
-          const allMatched = newTiles.every(
-            (tile) => tile.matched || tile.value === 8
-          );
-
-          if (allMatched) {
-            setTimeout(() => handleLevelComplete(), 500);
-          }
-
-          return {
-            ...prev,
-            tiles: newTiles,
-            selectedTiles: [],
-            clicks: prev.clicks + 1,
-            wrongAttempts: newWrongAttempts,
-          };
-        });
-
-        if (isMatch) {
-          setMatchCount((prev) => prev + 1);
-        }
-      }
-    };
-
-    checkForMatch();
-  }, [gameState.selectedTiles]);
+  }, [
+    gameState.gameStarted,
+    gameState.level,
+    gameState.tiles,
+    handleLevelComplete,
+  ]);
 
   // Render more specific and helpful hints
   const renderHints = () => {
@@ -719,9 +680,7 @@ const MemoryGame: React.FC = () => {
                 {gameState.level < 3 ? "Continue to Next Level" : "Play Again"}
               </button>
               <button
-                onClick={() =>
-                  setGameState((prev) => ({ ...prev, showLeaderboard: true }))
-                }
+                onClick={handleViewLeaderboards}
                 className="w-full bg-gray-200 py-3 px-4 rounded-lg hover:bg-gray-300 transition-colors"
               >
                 View Leaderboards
@@ -865,21 +824,21 @@ const MemoryGame: React.FC = () => {
             margin: "0 auto",
           }}
         >
-          {gameState.tiles.map((tile: Tile, index: number) => (
+          {gameState.tiles.map((tile: Tile) => (
             <div
               key={tile.id}
-              onClick={() => handleTileClick(index)}
-              data-wrong-attempts={gameState.wrongAttempts[index] || 0}
+              onClick={() => handleTileClick(tile.id)}
+              data-wrong-attempts={gameState.wrongAttempts[tile.id] || 0}
               className={`game-tile 
                 ${tile.revealed || tile.matched ? "revealed" : ""} 
                 ${tile.matched ? "matched" : ""}
                 ${
-                  !tile.matched && gameState.wrongAttempts[index] > 2
+                  !tile.matched && gameState.wrongAttempts[tile.id] > 2
                     ? "animate-wrong-match-severe"
                     : ""
                 }
                 ${
-                  !tile.matched && gameState.wrongAttempts[index] === 2
+                  !tile.matched && gameState.wrongAttempts[tile.id] === 2
                     ? "animate-wrong-match"
                     : ""
                 }

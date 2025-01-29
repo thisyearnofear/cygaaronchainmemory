@@ -1,11 +1,6 @@
-import {
-  useReadContract,
-  useWriteContract,
-  useWalletClient,
-  useChainId,
-} from "wagmi";
+import { useWriteContract, useChainId } from "wagmi";
 import { keccak256, type TransactionReceipt, stringToHex } from "viem";
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { publicClient } from "@/app/providers";
 
 const PENGUIN_GAME_ABI = [
