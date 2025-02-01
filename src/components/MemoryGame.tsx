@@ -560,20 +560,6 @@ const MemoryGame: React.FC = () => {
     }
   };
 
-  // Add refreshLeaderboard when viewing leaderboards
-  const handleViewLeaderboards = useCallback(async () => {
-    try {
-      await refreshLeaderboard();
-      setGameState((prev) => ({
-        ...prev,
-        showLeaderboard: true,
-        leaderboardKey: Date.now(),
-      }));
-    } catch (error) {
-      console.error("Failed to refresh leaderboard:", error);
-    }
-  }, [refreshLeaderboard]);
-
   // Update the hint effect
   useEffect(() => {
     if (!gameState.gameStarted) return;
@@ -888,10 +874,10 @@ const MemoryGame: React.FC = () => {
           {gameState.level === 3 && (
             <div className="mt-6 text-center animate-fade-in">
               <h3 className="text-xl font-bold text-emerald-600 mb-2">
-                🎉 Congratulations! You've Completed the Game!
+                🎉 Congratulations! You&apos;ve Completed the Game!
               </h3>
               <p className="text-gray-600">
-                You've mastered all levels of the Cygaar Memory Club!
+                You&apos;ve mastered all levels of the Cygaar Memory Club!
               </p>
             </div>
           )}
@@ -938,6 +924,7 @@ const MemoryGame: React.FC = () => {
             clicks={gameState.clicks}
             level={gameState.level}
             matches={matchCount}
+            phase={gameState.phase}
           />
         </>
       )}

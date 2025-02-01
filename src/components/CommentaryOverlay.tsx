@@ -5,6 +5,7 @@ interface CommentaryOverlayProps {
   clicks: number;
   level: number;
   matches?: number;
+  phase?: "pairs" | "triplets";
 }
 
 interface CommentaryType {
@@ -73,7 +74,7 @@ const getRandomComment = (comments: readonly string[]) =>
 const getRandomBoolean = () => Math.random() > 0.5;
 
 const CommentaryOverlay: React.FC<CommentaryOverlayProps> = memo(
-  function CommentaryOverlay({ clicks, level, matches = 0 }) {
+  function CommentaryOverlay({ clicks, level, matches = 0, phase }) {
     const [key, setKey] = useState(0);
     const [position, setPosition] = useState({ x: 0, y: 0 });
     const [currentComment, setCurrentComment] = useState<CommentaryType | null>(
@@ -161,7 +162,7 @@ const CommentaryOverlay: React.FC<CommentaryOverlayProps> = memo(
               image: "/images/penguin10.png",
               name: "Luca",
               comment: getRandomComment(
-                gameState.phase === "pairs"
+                phase === "pairs"
                   ? LEVEL3_PAIR_COMMENTS
                   : LEVEL3_TRIPLET_COMMENTS
               ),
@@ -179,7 +180,7 @@ const CommentaryOverlay: React.FC<CommentaryOverlayProps> = memo(
       }
 
       return null;
-    }, [clicks, level, matches, lastCommentAt]);
+    }, [clicks, level, matches, phase, lastCommentAt]);
 
     const getRandomPosition = useCallback(() => {
       const viewportWidth = Math.min(window.innerWidth, 800);
