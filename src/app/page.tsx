@@ -21,6 +21,10 @@ const ConnectButton = dynamic(
   { ssr: false }
 );
 
+const MusicPlayer = dynamic(() => import("@/components/MusicPlayer"), {
+  ssr: false,
+});
+
 export default function HomePage() {
   return (
     <ClientOnly>
@@ -29,6 +33,9 @@ export default function HomePage() {
           <div className="flex flex-col items-center gap-8">
             <ConnectButton />
             <MemoryGame />
+            <div className="music-player-container">
+              <MusicPlayer />
+            </div>
           </div>
         </div>
       </Suspense>

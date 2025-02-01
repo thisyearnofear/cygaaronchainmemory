@@ -47,6 +47,25 @@ const CYGAAR_LEVEL2_COMMENTS = [
   "yeti got your tongue? 🦍",
 ] as const;
 
+// Update and expand comments for Level 3
+const LEVEL3_PAIR_COMMENTS = [
+  "Find those pairs first! 👀",
+  "Two by two, that's how we do! 🎯",
+  "Pairs before triplets, smart strategy! 🧠",
+] as const;
+
+const LEVEL3_TRIPLET_COMMENTS = [
+  "Now for the triplets! 🎲",
+  "Three's company! 🎯",
+  "Triple or nothing! 🎲",
+] as const;
+
+const LEVEL3_YETI_DODGE = [
+  "Careful with those yetis! 🦍",
+  "Yetis are getting restless! ⚠️",
+  "Watch your step! 🚨",
+] as const;
+
 // Helper functions outside component
 const getRandomComment = (comments: readonly string[]) =>
   comments[Math.floor(Math.random() * comments.length)];
@@ -120,6 +139,43 @@ const CommentaryOverlay: React.FC<CommentaryOverlayProps> = memo(
             : getRandomComment(CYGAAR_GENERAL_COMMENTS),
           priority: true,
         };
+      }
+
+      // Level 3 Commentary Logic
+      if (level === 3) {
+        if (clicks === 6) {
+          return {
+            image: "/images/penguin10.png",
+            name: "Luca",
+            comment:
+              "Welcome to the final challenge! Find pairs first, then triplets!",
+            priority: true,
+          };
+        }
+
+        // Phase-specific comments
+        if (clicks > 6 && clicks % 10 === 0) {
+          const isLuca = getRandomBoolean();
+          if (isLuca) {
+            return {
+              image: "/images/penguin10.png",
+              name: "Luca",
+              comment: getRandomComment(
+                gameState.phase === "pairs"
+                  ? LEVEL3_PAIR_COMMENTS
+                  : LEVEL3_TRIPLET_COMMENTS
+              ),
+              priority: true,
+            };
+          } else {
+            return {
+              image: "/images/penguin9.png",
+              name: "Cygaar",
+              comment: getRandomComment(LEVEL3_YETI_DODGE),
+              priority: true,
+            };
+          }
+        }
       }
 
       return null;

@@ -8,7 +8,7 @@ import LeaderboardDisplay from "./LeaderboardDisplay";
 import NetworkCheck from "./NetworkCheck";
 import MiniLeaderboard from "./MiniLeaderboard";
 import CommentaryOverlay from "./CommentaryOverlay";
-import MusicPlayer from "./MusicPlayer";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 
 interface Tile {
   id: number;
@@ -30,6 +30,7 @@ type GameLevel = 1 | 2 | 3;
 // Update GameState to use the specific level type
 interface GameState {
   level: GameLevel; // This ensures level can only be 1, 2, or 3
+  phase?: "pairs" | "triplets"; // Track which phase we're in for Level 3
   clicks: number;
   tiles: Tile[];
   selectedTiles: number[];
@@ -63,7 +64,8 @@ type Level2Config = {
 type Level3Config = {
   rows: number;
   cols: number;
-  groups: number;
+  pairs: number;
+  triplets: number;
   yetis: number;
 };
 
@@ -71,7 +73,7 @@ type Level3Config = {
 const LEVEL_CONFIG = {
   1: { rows: 4, cols: 4, pairs: 8 },
   2: { rows: 4, cols: 4, triplets: 4, yetis: 1 },
-  3: { rows: 5, cols: 6, groups: 6, yetis: 5 },
+  3: { rows: 4, cols: 4, pairs: 3, triplets: 2, yetis: 2 }, // 14 tiles total: 6 in pairs, 6 in triplets, 2 yetis
 } as const satisfies Record<
   GameLevel,
   Level1Config | Level2Config | Level3Config
@@ -135,10 +137,14 @@ const useGameInitialization = (
           return;
         }
 
-        // Add groups of matching penguins
-        for (let i = 0; i < config.groups; i++) {
-          // Each group has 4 matching penguins
-          values.push(i, i, i, i);
+        // Add pairs
+        for (let i = 0; i < config.pairs; i++) {
+          values.push(i, i);
+        }
+
+        // Add triplets (starting from after pairs)
+        for (let i = 0; i < config.triplets; i++) {
+          values.push(i + config.pairs, i + config.pairs, i + config.pairs);
         }
 
         // Add yetis
@@ -151,6 +157,12 @@ const useGameInitialization = (
         for (let i = 0; i < remainingTiles; i++) {
           values.push(7);
         }
+
+        // Update game state
+        setGameState((prev) => ({
+          ...prev,
+          phase: "pairs", // Start with pairs phase
+        }));
       }
 
       // Shuffle values
@@ -177,7 +189,7 @@ const useGameInitialization = (
 function isLevel3Config(
   config: Level1Config | Level2Config | Level3Config
 ): config is Level3Config {
-  return "groups" in config && "yetis" in config;
+  return "pairs" in config && "triplets" in config && "yetis" in config;
 }
 
 const MemoryGame: React.FC = () => {
@@ -284,17 +296,27 @@ const MemoryGame: React.FC = () => {
   }, [gameState.level]);
 
   const handleLevelComplete = useCallback(async () => {
-    try {
-      // Show celebration first
-      setGameState((prev) => ({ ...prev, showCelebration: true }));
+    // Show celebration regardless of connection status
+    setGameState((prev) => {
+      // Only update if not already showing celebration
+      if (prev.showCelebration) return prev;
+      return { ...prev, showCelebration: true };
+    });
 
-      // Start the game session and submit score
+    // Don't attempt to start game session if not connected
+    if (!isConnected) return;
+
+    try {
+      // Only attempt to start game session if connected
       await startGame(gameState.level);
     } catch (error) {
       console.error("Level completion error:", error);
-      alert("Failed to submit score. Please try again.");
+      // Only show alert for submission errors if connected
+      if (isConnected) {
+        alert("Failed to submit score. Please try again.");
+      }
     }
-  }, [gameState.level, startGame]);
+  }, [gameState.level, startGame, isConnected]);
 
   // Add these handlers before the handleTileClick function
   const handleMatch = useCallback((matchedTiles: number[]) => {
@@ -378,9 +400,18 @@ const MemoryGame: React.FC = () => {
       return;
     }
 
-    // For Level 1, don't allow more than 2 tiles to be revealed at once
-    if (gameState.level === 1 && gameState.selectedTiles.length >= 2) {
-      return;
+    // For Level 3, handle phases
+    if (gameState.level === 3) {
+      const maxSelections = gameState.phase === "pairs" ? 2 : 3;
+      if (gameState.selectedTiles.length >= maxSelections) {
+        return;
+      }
+    } else {
+      // For other levels, use existing logic
+      const maxSelections = gameState.level === 1 ? 2 : 3;
+      if (gameState.selectedTiles.length >= maxSelections) {
+        return;
+      }
     }
 
     // Increment clicks and reveal the tile
@@ -393,29 +424,89 @@ const MemoryGame: React.FC = () => {
       ),
     }));
 
-    // Handle yeti click
+    // Handle yeti click differently for Level 2 and 3
     if (gameState.tiles[index].value === 8) {
-      setGameState((prev) => ({
-        ...prev,
-        showYeti: true,
-        selectedTiles: [],
-        tiles: prev.tiles.map((tile) => ({ ...tile, revealed: false })),
-      }));
+      if (gameState.level === 3) {
+        // Level 3: Reset all progress when hitting a yeti
+        setGameState((prev) => ({
+          ...prev,
+          showYeti: true,
+          selectedTiles: [],
+          tiles: prev.tiles.map((tile) => ({
+            ...tile,
+            revealed: false,
+            matched: false, // Reset matches only in Level 3
+          })),
+        }));
+      } else {
+        // Level 2: Just show yeti animation, don't reset progress
+        setGameState((prev) => ({
+          ...prev,
+          showYeti: true,
+          selectedTiles: [],
+          tiles: prev.tiles.map((tile) => ({
+            ...tile,
+            revealed: tile.matched ? true : false, // Keep matched tiles revealed
+          })),
+        }));
+      }
       return;
     }
 
-    // Check for matches based on level
+    // Check for matches with phase awareness
     const selectedTiles = [...gameState.selectedTiles, index];
-    const requiredMatches =
-      gameState.level === 3 ? 4 : gameState.level === 2 ? 3 : 2;
+    let requiredMatches;
+    if (gameState.level === 3) {
+      requiredMatches = gameState.phase === "pairs" ? 2 : 3;
+    } else {
+      requiredMatches = gameState.level === 1 ? 2 : 3;
+    }
 
     if (selectedTiles.length === requiredMatches) {
-      // Process the match
       const values = selectedTiles.map((i) => gameState.tiles[i].value);
       const allMatch = values.every((v) => v === values[0]);
 
       if (allMatch) {
         handleMatch(selectedTiles);
+
+        // Check if all pairs are found to move to triplets phase
+        if (gameState.level === 3 && gameState.phase === "pairs") {
+          // Log for debugging
+          console.log("Checking pairs completion");
+          const pairTiles = gameState.tiles.filter(
+            (tile) => tile.matched && tile.value < 3 // Changed from gameState.level to 3 to match pair values
+          );
+          console.log("Matched pair tiles:", pairTiles.length);
+
+          if (pairTiles.length === 6) {
+            // 3 pairs = 6 tiles
+            console.log("Moving to triplets phase");
+            setGameState((prev) => {
+              // Create new board with existing triplets but shuffled positions
+              const newTiles = [...prev.tiles].map((tile) => ({
+                ...tile,
+                matched: false,
+                revealed: false,
+              }));
+
+              // Add one more yeti for phase 2
+              const nonYetiIndex = newTiles.findIndex(
+                (tile) => tile.value !== 8
+              );
+              if (nonYetiIndex !== -1) {
+                newTiles[nonYetiIndex].value = 8; // Convert one tile to a yeti
+              }
+
+              // Shuffle positions
+              return {
+                ...prev,
+                phase: "triplets",
+                selectedTiles: [],
+                tiles: newTiles.sort(() => Math.random() - 0.5),
+              };
+            });
+          }
+        }
       } else {
         handleNoMatch(selectedTiles);
       }
@@ -519,7 +610,12 @@ const MemoryGame: React.FC = () => {
 
   // Update the completion check effect
   useEffect(() => {
-    if (!gameState.gameStarted || !gameState.tiles.length) return;
+    if (
+      !gameState.gameStarted ||
+      !gameState.tiles.length ||
+      gameState.showCelebration
+    )
+      return;
 
     const matchableTiles = gameState.tiles.filter(
       (tile) => tile.value !== 7 && tile.value !== 8
@@ -533,6 +629,7 @@ const MemoryGame: React.FC = () => {
     gameState.gameStarted,
     gameState.level,
     gameState.tiles,
+    gameState.showCelebration,
     handleLevelComplete,
   ]);
 
@@ -582,22 +679,22 @@ const MemoryGame: React.FC = () => {
         <div className="mt-4 space-y-2">
           {gameState.hints.showPatternHint && (
             <div className="bg-blue-100 p-3 rounded-lg text-sm animate-fade-in">
-              <span className="font-bold">Level 3 Tip:</span> Each group can
-              have 2-4 matching penguins. Pay attention to how many matches you
-              need!
+              <span className="font-bold">Level 3 Tip:</span>{" "}
+              {gameState.phase === "pairs"
+                ? "First find all 3 pairs of matching penguins!"
+                : "Now find the 2 triplets of matching penguins!"}
             </div>
           )}
 
           {gameState.hints.showLevel3Hint && (
             <div className="bg-purple-100 p-3 rounded-lg text-sm animate-fade-in">
-              <span className="font-bold">⚠️ Warning:</span> The 5 yetis in this
+              <span className="font-bold">⚠️ Warning:</span> The 2 yetis in this
               level will reset ALL your progress! Try to remember where they
               are.
               {gameState.clicks >= 120 && (
                 <div className="mt-2 text-xs text-gray-600">
                   <span className="font-bold">Pro Tip:</span> Try revealing
-                  tiles in a systematic pattern to find groups and remember yeti
-                  locations.
+                  tiles in a systematic pattern to find matches and avoid yetis.
                 </div>
               )}
             </div>
@@ -606,6 +703,17 @@ const MemoryGame: React.FC = () => {
       );
     }
     return null;
+  };
+
+  const getTweetMessage = () => {
+    if (gameState.level === 1) {
+      return `🐧 Just matched ${gameState.clicks} penguins in Level 1 of @CygaarMemoryClub! Can you beat my score?`;
+    } else if (gameState.level === 2) {
+      return `🐧 Found all triplets in ${gameState.clicks} clicks at Level 2 of @CygaarMemoryClub! Avoided the yeti too! 🎯`;
+    } else {
+      // Level 3 completion
+      return `🏆 COMPLETED @CygaarMemoryClub with ${gameState.clicks} clicks! Found all pairs & triplets while dodging yetis! Who's next? 🐧`;
+    }
   };
 
   // Update the celebration modal content
@@ -654,17 +762,31 @@ const MemoryGame: React.FC = () => {
           {/* Action Buttons */}
           {!completionState.showingOptions ? (
             <div className="space-y-3">
-              <button
-                onClick={() =>
-                  setCompletionState((prev) => ({
-                    ...prev,
-                    showingOptions: true,
-                  }))
-                }
-                className="w-full bg-emerald-500 text-white py-3 px-4 rounded-lg hover:bg-emerald-600 transition-colors"
-              >
-                Submit Score to Leaderboard
-              </button>
+              {isConnected ? (
+                <button
+                  onClick={() =>
+                    setCompletionState((prev) => ({
+                      ...prev,
+                      showingOptions: true,
+                    }))
+                  }
+                  className="w-full bg-emerald-500 text-white py-3 px-4 rounded-lg hover:bg-emerald-600 transition-colors"
+                >
+                  Submit Score to Leaderboard
+                </button>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-emerald-50 p-4 rounded-lg text-sm">
+                    <p className="mb-3">
+                      Connect your wallet to submit your score to the
+                      leaderboard!
+                    </p>
+                    <div className="flex justify-center">
+                      <ConnectButton />
+                    </div>
+                  </div>
+                </div>
+              )}
               <button
                 onClick={
                   gameState.level < 3 ? handleNextLevel : handleRetryLevel
@@ -672,12 +794,6 @@ const MemoryGame: React.FC = () => {
                 className="w-full bg-green-500 text-white py-3 px-4 rounded-lg hover:bg-green-600 transition-colors"
               >
                 {gameState.level < 3 ? "Continue to Next Level" : "Play Again"}
-              </button>
-              <button
-                onClick={handleViewLeaderboards}
-                className="w-full bg-gray-200 py-3 px-4 rounded-lg hover:bg-gray-300 transition-colors"
-              >
-                View Leaderboards
               </button>
             </div>
           ) : (
@@ -747,21 +863,64 @@ const MemoryGame: React.FC = () => {
               </div>
             </div>
           )}
+
+          <div className="mt-4 text-center">
+            <a
+              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(
+                getTweetMessage()
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-blue-400 text-white px-4 py-2 rounded-lg hover:bg-blue-500 transition-colors"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" />
+              </svg>
+              Share Score
+            </a>
+          </div>
+
+          {gameState.level === 3 && (
+            <div className="mt-6 text-center animate-fade-in">
+              <h3 className="text-xl font-bold text-emerald-600 mb-2">
+                🎉 Congratulations! You've Completed the Game!
+              </h3>
+              <p className="text-gray-600">
+                You've mastered all levels of the Cygaar Memory Club!
+              </p>
+            </div>
+          )}
         </div>
       </div>
     );
   };
 
-  if (!isConnected) {
+  // Show welcome screen only if game hasn't started
+  if (!gameState.gameStarted) {
     return (
       <div className="game-container">
         <div className="game-info">
           <h2 className="text-2xl font-bold mb-2">
-            Welcome to Cygaar Memory Club
+            {gameState.level === 1
+              ? "Welcome to Cygaar Memory Club"
+              : `Ready for Level ${gameState.level}?`}
           </h2>
           <p className="text-lg text-gray-600 mb-4">
-            Connect your wallet to start playing!
+            {gameState.level === 1
+              ? "Start playing now! Connect your wallet to submit scores to the leaderboard."
+              : "Keep going! You're doing great!"}
           </p>
+          <button
+            onClick={handleStartGame}
+            className="px-6 py-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors mb-4"
+          >
+            {gameState.level === 1 ? "Start Game" : "Continue Game"}
+          </button>
           <LeaderboardDisplay refreshKey={gameState.leaderboardKey} />
         </div>
       </div>
@@ -791,7 +950,9 @@ const MemoryGame: React.FC = () => {
             ? "Find matching pairs of penguins. Click two tiles to reveal them."
             : gameState.level === 2
             ? "Find triplets of matching penguins. Watch out for yetis!"
-            : "Final Challenge: Find triplets and watch for extra yetis!"}
+            : gameState.phase === "pairs"
+            ? "Phase 1: Find three pairs of matching penguins! Watch out for yetis that reset progress!"
+            : "Phase 2: Now find two triplets of matching penguins! Yetis still reset everything!"}
         </div>
         {!gameState.gameStarted && (
           <>
@@ -859,8 +1020,8 @@ const MemoryGame: React.FC = () => {
             <Image
               src="/images/penguin8.png"
               alt="Yeti"
-              width={150}
-              height={150}
+              width={200}
+              height={200}
               className="animate-bounce-custom mx-auto mb-4"
               priority
             />
@@ -886,10 +1047,6 @@ const MemoryGame: React.FC = () => {
       )}
 
       {renderHints()}
-
-      <div className="mt-8">
-        <MusicPlayer />
-      </div>
     </div>
   );
 };

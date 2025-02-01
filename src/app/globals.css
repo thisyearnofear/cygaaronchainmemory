@@ -234,3 +234,7 @@
 .animate-wrong-match-severe {
   animation: wrongMatchSevere 1s ease-in-out;
 }
+
+.music-player-container {
+  @apply mt-8 w-full flex justify-center;
+}
