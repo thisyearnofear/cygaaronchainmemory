@@ -185,7 +185,7 @@ const MemoryGame: React.FC = () => {
   useImagePreloader();
 
   // Move the hook inside the component
-  const { submitScore, leaderboards, refreshLeaderboard, startGame } =
+  const { submitScore, refreshLeaderboard, startGame } =
     usePenguinGameContract();
 
   const { isConnected, address: account } = useAccount();
@@ -660,17 +660,6 @@ const MemoryGame: React.FC = () => {
     return null;
   };
 
-  const getTweetMessage = () => {
-    if (gameState.level === 1) {
-      return `🐧 Just matched ${gameState.clicks} penguins in Level 1 of @CygaarMemoryClub! Can you beat my score?`;
-    } else if (gameState.level === 2) {
-      return `🐧 Found all triplets in ${gameState.clicks} clicks at Level 2 of @CygaarMemoryClub! Avoided the yeti too! 🎯`;
-    } else {
-      // Level 3 completion
-      return `🏆 COMPLETED @CygaarMemoryClub with ${gameState.clicks} clicks! Found all pairs & triplets while dodging yetis! Who's next? 🐧`;
-    }
-  };
-
   // Update the celebration modal content
   const handleCelebrationActions = () => {
     const getLevelDescription = (level: number) => {
@@ -694,7 +683,7 @@ const MemoryGame: React.FC = () => {
     const tweetText = encodeURIComponent(
       `🐧 Just ${getLevelDescription(gameState.level)} in ${
         gameState.clicks
-      } clicks at the $Cygaar Memory Club!\n\n` +
+      } clicks at the $Cygaar Memory Club #remenguini\n\n` +
         `https://www.abs.xyz/trade/token?address=0x35efa4699edd7b468cbbf4fff7b6e7afc0a7ada6\n\n` +
         `thanks @0xcygaar & team for building @abstractchain\n\n` +
         `${getPlayerName()}\n\n` +
