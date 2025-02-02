@@ -10,7 +10,7 @@
 
 @layer components {
   .game-container {
-    @apply max-w-4xl mx-auto p-4;
+    @apply max-w-4xl mx-auto p-4 min-h-[600px] relative;
   }
 
   .game-info {
@@ -18,15 +18,17 @@
   }
 
   .game-grid {
-    @apply grid gap-4 mx-auto max-w-[800px];
+    @apply grid gap-4 mx-auto max-w-[800px] min-h-[400px];
   }
 
   .game-tile {
-    @apply relative aspect-square cursor-pointer transition-all duration-300;
+    @apply relative aspect-square cursor-pointer transform transition-all duration-300;
     background-image: url("/images/mound.png");
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
+    backface-visibility: hidden;
+    will-change: transform;
   }
 
   .game-tile:hover {
@@ -41,6 +43,8 @@
 
   .penguin-image {
     @apply w-full h-full object-contain transition-opacity duration-300;
+    backface-visibility: hidden;
+    will-change: opacity;
   }
 
   .penguin-image.matched {

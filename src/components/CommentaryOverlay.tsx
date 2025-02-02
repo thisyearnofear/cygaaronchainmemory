@@ -17,10 +17,14 @@ interface CommentaryType {
 
 // Move constants outside component to prevent recreation
 const LUCA_EARLY_COMMENTS = [
-  "You've got this! 🐧",
-  "Great start, keep going! ✨",
-  "Look at those matching skills! 🎯",
-  "You're a natural at this! 🌟",
+  "You've got this! Every click counts! 🐧",
+  "Take your time, you're doing great! ✨",
+  "Those matching skills are getting better! 🎯",
+  "You're learning fast! Keep it up! 🌟",
+  "Don't mind Cygaar, you're doing fine! 💪",
+  "Focus and believe in yourself! 🎮",
+  "That's the spirit! Keep going! 🚀",
+  "Every master was once a beginner! 📚",
 ] as const;
 
 const LUCA_MATCH_COMMENTS = [
@@ -31,13 +35,16 @@ const LUCA_MATCH_COMMENTS = [
 
 // Update and expand Cygaar's comments
 const CYGAAR_GENERAL_COMMENTS = [
-  "imagine taking this many clicks 🥱",
-  "my grandma could do better... and she's a penguin 🐧",
-  "ser... are you even trying? 💀",
-  "ngmi with those moves 😴",
-  "skill issue detected 📸",
-  "anon pls... 🫣",
-  "maybe try candy crush instead? 🍬",
+  "imagine taking this many clicks... my pet rock could do better 💀",
+  "anon discovers memory game, gets rekt 📸",
+  "ser... this is painful to watch 🫣",
+  "ngmi with those memory skills fren 🥱",
+  "maybe stick to finger painting? 🎨",
+  "skill issue detected, initiating copium protocol 🤖",
+  "anon pls... my grandma's goldfish plays better 🐠",
+  "watching paint dry would be more exciting 🎯",
+  "certified smol brain moment 🧠",
+  "copium levels reaching ATH 📈",
 ] as const;
 
 const CYGAAR_LEVEL2_COMMENTS = [
@@ -67,11 +74,48 @@ const LEVEL3_YETI_DODGE = [
   "Watch your step! 🚨",
 ] as const;
 
+// Add more variety to Level 3 comments
+const LEVEL3_COMMENTS = [
+  "Double the yetis, double the fun! 🦍🦍",
+  "Keep those pairs coming! 🎯",
+  "Yetis to the left of me, yetis to the right... 👀",
+  "Memory master in training! 🧠",
+  "Those yetis look extra grumpy today... 😅",
+  "Remember where those yetis are! 🗺️",
+  "Steady hands, steady mind! 🎮",
+  "One pair at a time... you got this! 🎲",
+  "The yetis are watching your every move... 👁️",
+  "Almost there, don't let the yetis win! 🎯",
+  "This is the final boss of memory games! 🏰",
+  "Show those yetis who's boss! 💪",
+] as const;
+
+const LEVEL3_YETI_COMMENTS = [
+  "Two yetis?! This is getting serious! 🦍",
+  "Double trouble with these yetis! ⚠️",
+  "Watch your step, twice the yetis! 🚨",
+  "One yeti was bad enough... 😱",
+  "The dynamic duo strikes again! 🦍🦍",
+  "These yetis mean business! 💪",
+] as const;
+
+const LEVEL3_PROGRESS_COMMENTS = [
+  "You're getting good at this! 🌟",
+  "Keep that momentum going! 🚀",
+  "The yetis can't stop you! 💪",
+  "Memory skills over 9000! 📈",
+  "You're making this look easy! 🎮",
+  "The leaderboard awaits! 🏆",
+] as const;
+
 // Helper functions outside component
 const getRandomComment = (comments: readonly string[]) =>
   comments[Math.floor(Math.random() * comments.length)];
 
 const getRandomBoolean = () => Math.random() > 0.5;
+
+// Add type for getComment function
+type GetCommentFunction = () => CommentaryType | null;
 
 const CommentaryOverlay: React.FC<CommentaryOverlayProps> = memo(
   function CommentaryOverlay({ clicks, level, matches = 0, phase }) {
@@ -86,7 +130,7 @@ const CommentaryOverlay: React.FC<CommentaryOverlayProps> = memo(
       timestamp: 0,
     });
 
-    const getComment = useCallback(() => {
+    const getComment: GetCommentFunction = useCallback(() => {
       const now = Date.now();
       const timeSinceLastComment = now - lastCommentAt.timestamp;
       const minimumInterval = 5000;
@@ -149,38 +193,42 @@ const CommentaryOverlay: React.FC<CommentaryOverlayProps> = memo(
             image: "/images/penguin10.png",
             name: "Luca",
             comment:
-              "Welcome to the final challenge! Find pairs first, then triplets!",
+              "Welcome to the final challenge! Find all pairs, but beware of TWO yetis!",
             priority: true,
           };
         }
 
-        // Phase-specific comments
-        if (clicks > 6 && clicks % 10 === 0) {
+        if (clicks > 6 && clicks % 8 === 0) {
+          const commentType = Math.floor(Math.random() * 3); // 0, 1, or 2
           const isLuca = getRandomBoolean();
-          if (isLuca) {
-            return {
-              image: "/images/penguin10.png",
-              name: "Luca",
-              comment: getRandomComment(
-                phase === "pairs"
-                  ? LEVEL3_PAIR_COMMENTS
-                  : LEVEL3_TRIPLET_COMMENTS
-              ),
-              priority: true,
-            };
-          } else {
-            return {
-              image: "/images/penguin9.png",
-              name: "Cygaar",
-              comment: getRandomComment(LEVEL3_YETI_DODGE),
-              priority: true,
-            };
-          }
+
+          return {
+            image: isLuca ? "/images/penguin10.png" : "/images/penguin9.png",
+            name: isLuca ? "Luca" : "Cygaar",
+            comment: getRandomComment(
+              commentType === 0
+                ? LEVEL3_COMMENTS
+                : commentType === 1
+                ? LEVEL3_YETI_COMMENTS
+                : LEVEL3_PROGRESS_COMMENTS
+            ),
+            priority: true,
+          };
+        }
+
+        // Add special comments for match streaks
+        if (matches > 0 && matches % 2 === 0) {
+          return {
+            image: "/images/penguin10.png",
+            name: "Luca",
+            comment: "Great memory! Keep those pairs coming! 🎯",
+            priority: true,
+          };
         }
       }
 
       return null;
-    }, [clicks, level, matches, phase, lastCommentAt]);
+    }, [clicks, level, matches, lastCommentAt]);
 
     const getRandomPosition = useCallback(() => {
       const viewportWidth = Math.min(window.innerWidth, 800);

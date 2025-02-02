@@ -9,6 +9,7 @@ import NetworkCheck from "./NetworkCheck";
 import MiniLeaderboard from "./MiniLeaderboard";
 import CommentaryOverlay from "./CommentaryOverlay";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { useImagePreloader } from "@/hooks/useImagePreloader";
 
 interface Tile {
   id: number;
@@ -65,7 +66,6 @@ type Level3Config = {
   rows: number;
   cols: number;
   pairs: number;
-  triplets: number;
   yetis: number;
 };
 
@@ -73,7 +73,7 @@ type Level3Config = {
 const LEVEL_CONFIG = {
   1: { rows: 4, cols: 4, pairs: 8 },
   2: { rows: 4, cols: 4, triplets: 4, yetis: 1 },
-  3: { rows: 4, cols: 4, pairs: 3, triplets: 2, yetis: 2 }, // 14 tiles total: 6 in pairs, 6 in triplets, 2 yetis
+  3: { rows: 4, cols: 4, pairs: 7, yetis: 2 }, // 14 tiles total: 7 pairs and 2 yetis
 } as const satisfies Record<
   GameLevel,
   Level1Config | Level2Config | Level3Config
@@ -142,11 +142,6 @@ const useGameInitialization = (
           values.push(i, i);
         }
 
-        // Add triplets (starting from after pairs)
-        for (let i = 0; i < config.triplets; i++) {
-          values.push(i + config.pairs, i + config.pairs, i + config.pairs);
-        }
-
         // Add yetis
         for (let i = 0; i < config.yetis; i++) {
           values.push(8);
@@ -185,14 +180,17 @@ const useGameInitialization = (
   }, [gameState.gameStarted, gameState.level, setGameState]);
 };
 
-// Add type guard for Level 3 config
+// Update type guard for Level 3
 function isLevel3Config(
   config: Level1Config | Level2Config | Level3Config
 ): config is Level3Config {
-  return "pairs" in config && "triplets" in config && "yetis" in config;
+  return "pairs" in config && "yetis" in config;
 }
 
 const MemoryGame: React.FC = () => {
+  // Add at the top of the component
+  useImagePreloader();
+
   // Move the hook inside the component
   const { submitScore, leaderboards, refreshLeaderboard, startGame } =
     usePenguinGameContract();
@@ -400,18 +398,10 @@ const MemoryGame: React.FC = () => {
       return;
     }
 
-    // For Level 3, handle phases
-    if (gameState.level === 3) {
-      const maxSelections = gameState.phase === "pairs" ? 2 : 3;
-      if (gameState.selectedTiles.length >= maxSelections) {
-        return;
-      }
-    } else {
-      // For other levels, use existing logic
-      const maxSelections = gameState.level === 1 ? 2 : 3;
-      if (gameState.selectedTiles.length >= maxSelections) {
-        return;
-      }
+    // Get max selections based on level
+    const maxSelections = gameState.level === 2 ? 3 : 2;
+    if (gameState.selectedTiles.length >= maxSelections) {
+      return;
     }
 
     // Increment clicks and reveal the tile
@@ -424,7 +414,7 @@ const MemoryGame: React.FC = () => {
       ),
     }));
 
-    // Handle yeti click differently for Level 2 and 3
+    // Handle yeti click
     if (gameState.tiles[index].value === 8) {
       if (gameState.level === 3) {
         // Level 3: Reset all progress when hitting a yeti
@@ -435,32 +425,23 @@ const MemoryGame: React.FC = () => {
           tiles: prev.tiles.map((tile) => ({
             ...tile,
             revealed: false,
-            matched: false, // Reset matches only in Level 3
+            matched: false,
           })),
         }));
       } else {
-        // Level 2: Just show yeti animation, don't reset progress
+        // Level 2: Just show yeti animation
         setGameState((prev) => ({
           ...prev,
           showYeti: true,
           selectedTiles: [],
-          tiles: prev.tiles.map((tile) => ({
-            ...tile,
-            revealed: tile.matched ? true : false, // Keep matched tiles revealed
-          })),
         }));
       }
       return;
     }
 
-    // Check for matches with phase awareness
+    // Check for matches
     const selectedTiles = [...gameState.selectedTiles, index];
-    let requiredMatches;
-    if (gameState.level === 3) {
-      requiredMatches = gameState.phase === "pairs" ? 2 : 3;
-    } else {
-      requiredMatches = gameState.level === 1 ? 2 : 3;
-    }
+    const requiredMatches = gameState.level === 2 ? 3 : 2;
 
     if (selectedTiles.length === requiredMatches) {
       const values = selectedTiles.map((i) => gameState.tiles[i].value);
@@ -468,45 +449,6 @@ const MemoryGame: React.FC = () => {
 
       if (allMatch) {
         handleMatch(selectedTiles);
-
-        // Check if all pairs are found to move to triplets phase
-        if (gameState.level === 3 && gameState.phase === "pairs") {
-          // Log for debugging
-          console.log("Checking pairs completion");
-          const pairTiles = gameState.tiles.filter(
-            (tile) => tile.matched && tile.value < 3 // Changed from gameState.level to 3 to match pair values
-          );
-          console.log("Matched pair tiles:", pairTiles.length);
-
-          if (pairTiles.length === 6) {
-            // 3 pairs = 6 tiles
-            console.log("Moving to triplets phase");
-            setGameState((prev) => {
-              // Create new board with existing triplets but shuffled positions
-              const newTiles = [...prev.tiles].map((tile) => ({
-                ...tile,
-                matched: false,
-                revealed: false,
-              }));
-
-              // Add one more yeti for phase 2
-              const nonYetiIndex = newTiles.findIndex(
-                (tile) => tile.value !== 8
-              );
-              if (nonYetiIndex !== -1) {
-                newTiles[nonYetiIndex].value = 8; // Convert one tile to a yeti
-              }
-
-              // Shuffle positions
-              return {
-                ...prev,
-                phase: "triplets",
-                selectedTiles: [],
-                tiles: newTiles.sort(() => Math.random() - 0.5),
-              };
-            });
-          }
-        }
       } else {
         handleNoMatch(selectedTiles);
       }
@@ -937,9 +879,7 @@ const MemoryGame: React.FC = () => {
             ? "Find matching pairs of penguins. Click two tiles to reveal them."
             : gameState.level === 2
             ? "Find triplets of matching penguins. Watch out for yetis!"
-            : gameState.phase === "pairs"
-            ? "Phase 1: Find three pairs of matching penguins! Watch out for yetis that reset progress!"
-            : "Phase 2: Now find two triplets of matching penguins! Yetis still reset everything!"}
+            : "Final Challenge: Find all pairs while avoiding TWO yetis! Watch out - they'll reset your progress!"}
         </div>
         {!gameState.gameStarted && (
           <>
@@ -993,7 +933,8 @@ const MemoryGame: React.FC = () => {
                   width={150}
                   height={150}
                   className={`penguin-image ${tile.matched ? "matched" : ""}`}
-                  priority
+                  priority={true}
+                  loading="eager"
                 />
               )}
             </div>
