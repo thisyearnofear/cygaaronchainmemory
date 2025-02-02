@@ -18,11 +18,17 @@
   }
 
   .game-grid {
-    @apply grid gap-4 mx-auto max-w-[800px] min-h-[400px];
+    @apply grid gap-4 mx-auto;
+    width: 100%;
+    max-width: 600px;
+    aspect-ratio: 1;
+    margin: 0 auto;
   }
 
   .game-tile {
-    @apply relative aspect-square cursor-pointer transform transition-all duration-300;
+    @apply relative cursor-pointer transform transition-all duration-300;
+    aspect-ratio: 1;
+    min-height: 80px;
     background-image: url("/images/mound.png");
     background-size: contain;
     background-repeat: no-repeat;
@@ -43,6 +49,7 @@
 
   .penguin-image {
     @apply w-full h-full object-contain transition-opacity duration-300;
+    padding: 10%;
     backface-visibility: hidden;
     will-change: opacity;
   }

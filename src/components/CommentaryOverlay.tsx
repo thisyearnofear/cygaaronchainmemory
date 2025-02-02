@@ -5,7 +5,6 @@ interface CommentaryOverlayProps {
   clicks: number;
   level: number;
   matches?: number;
-  phase?: "pairs" | "triplets";
 }
 
 interface CommentaryType {
@@ -25,6 +24,10 @@ const LUCA_EARLY_COMMENTS = [
   "Focus and believe in yourself! 🎮",
   "That's the spirit! Keep going! 🚀",
   "Every master was once a beginner! 📚",
+  "You're getting the hang of it! 🎯",
+  "Practice makes perfect! 🌈",
+  "Keep that concentration going! 🧠",
+  "You're on the right track! 🛤️",
 ] as const;
 
 const LUCA_MATCH_COMMENTS = [
@@ -45,6 +48,10 @@ const CYGAAR_GENERAL_COMMENTS = [
   "watching paint dry would be more exciting 🎯",
   "certified smol brain moment 🧠",
   "copium levels reaching ATH 📈",
+  "have you tried turning your brain on and off again? 🔄",
+  "memory.exe has stopped working 💻",
+  "this is why we can't have nice things 🤦‍♂️",
+  "my toaster has better memory than this 🍞",
 ] as const;
 
 const CYGAAR_LEVEL2_COMMENTS = [
@@ -56,25 +63,6 @@ const CYGAAR_LEVEL2_COMMENTS = [
 ] as const;
 
 // Update and expand comments for Level 3
-const LEVEL3_PAIR_COMMENTS = [
-  "Find those pairs first! 👀",
-  "Two by two, that's how we do! 🎯",
-  "Pairs before triplets, smart strategy! 🧠",
-] as const;
-
-const LEVEL3_TRIPLET_COMMENTS = [
-  "Now for the triplets! 🎲",
-  "Three's company! 🎯",
-  "Triple or nothing! 🎲",
-] as const;
-
-const LEVEL3_YETI_DODGE = [
-  "Careful with those yetis! 🦍",
-  "Yetis are getting restless! ⚠️",
-  "Watch your step! 🚨",
-] as const;
-
-// Add more variety to Level 3 comments
 const LEVEL3_COMMENTS = [
   "Double the yetis, double the fun! 🦍🦍",
   "Keep those pairs coming! 🎯",
@@ -118,7 +106,7 @@ const getRandomBoolean = () => Math.random() > 0.5;
 type GetCommentFunction = () => CommentaryType | null;
 
 const CommentaryOverlay: React.FC<CommentaryOverlayProps> = memo(
-  function CommentaryOverlay({ clicks, level, matches = 0, phase }) {
+  function CommentaryOverlay({ clicks, level, matches = 0 }) {
     const [key, setKey] = useState(0);
     const [position, setPosition] = useState({ x: 0, y: 0 });
     const [currentComment, setCurrentComment] = useState<CommentaryType | null>(
@@ -159,9 +147,10 @@ const CommentaryOverlay: React.FC<CommentaryOverlayProps> = memo(
           };
         }
 
-        // Regular gameplay comments
-        if (clicks > 6 && clicks % 12 === 0) {
-          const isLuca = getRandomBoolean();
+        // Regular gameplay comments with better pacing
+        if (clicks > 6 && clicks % 8 === 0) {
+          // Changed from 12 to 8 for more frequent comments
+          const isLuca = Math.random() > 0.4; // 60% Luca, 40% Cygaar for better balance
           return {
             image: isLuca ? "/images/penguin10.png" : "/images/penguin9.png",
             name: isLuca ? "Luca" : "Cygaar",

@@ -31,7 +31,6 @@ type GameLevel = 1 | 2 | 3;
 // Update GameState to use the specific level type
 interface GameState {
   level: GameLevel; // This ensures level can only be 1, 2, or 3
-  phase?: "pairs" | "triplets"; // Track which phase we're in for Level 3
   clicks: number;
   tiles: Tile[];
   selectedTiles: number[];
@@ -152,12 +151,6 @@ const useGameInitialization = (
         for (let i = 0; i < remainingTiles; i++) {
           values.push(7);
         }
-
-        // Update game state
-        setGameState((prev) => ({
-          ...prev,
-          phase: "pairs", // Start with pairs phase
-        }));
       }
 
       // Shuffle values
@@ -231,6 +224,9 @@ const MemoryGame: React.FC = () => {
 
   // Add a ref to track pending hide operations
   const pendingHideRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Add ref for yeti timeout
+  const yetiTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Use the initialization hook
   useGameInitialization(gameState, setGameState);
@@ -398,6 +394,53 @@ const MemoryGame: React.FC = () => {
       return;
     }
 
+    // Handle yeti click first
+    if (gameState.tiles[index].value === 8) {
+      // Clear any existing timeouts
+      if (yetiTimeoutRef.current) {
+        clearTimeout(yetiTimeoutRef.current);
+      }
+
+      if (gameState.level === 3) {
+        // Level 3: Reset all progress when hitting a yeti
+        setGameState((prev) => ({
+          ...prev,
+          showYeti: true,
+          selectedTiles: [],
+          tiles: prev.tiles.map((tile) => ({
+            ...tile,
+            revealed: false,
+            matched: false,
+          })),
+        }));
+      } else {
+        // Level 2: Just show yeti animation and continue as normal tile
+        setGameState((prev) => ({
+          ...prev,
+          showYeti: true,
+          clicks: prev.clicks + 1,
+          selectedTiles: [...prev.selectedTiles, index],
+          tiles: prev.tiles.map((tile, i) =>
+            i === index ? { ...tile, revealed: true } : tile
+          ),
+        }));
+      }
+
+      // Auto-hide yeti after 1.5 seconds
+      yetiTimeoutRef.current = setTimeout(() => {
+        setGameState((prev) => ({ ...prev, showYeti: false }));
+      }, 1500);
+
+      // For Level 2, continue with selection logic
+      if (gameState.level === 2) {
+        const selectedTiles = [...gameState.selectedTiles, index];
+        if (selectedTiles.length === 3) {
+          handleNoMatch(selectedTiles);
+        }
+      }
+      return;
+    }
+
     // Get max selections based on level
     const maxSelections = gameState.level === 2 ? 3 : 2;
     if (gameState.selectedTiles.length >= maxSelections) {
@@ -413,31 +456,6 @@ const MemoryGame: React.FC = () => {
         i === index ? { ...tile, revealed: true } : tile
       ),
     }));
-
-    // Handle yeti click
-    if (gameState.tiles[index].value === 8) {
-      if (gameState.level === 3) {
-        // Level 3: Reset all progress when hitting a yeti
-        setGameState((prev) => ({
-          ...prev,
-          showYeti: true,
-          selectedTiles: [],
-          tiles: prev.tiles.map((tile) => ({
-            ...tile,
-            revealed: false,
-            matched: false,
-          })),
-        }));
-      } else {
-        // Level 2: Just show yeti animation
-        setGameState((prev) => ({
-          ...prev,
-          showYeti: true,
-          selectedTiles: [],
-        }));
-      }
-      return;
-    }
 
     // Check for matches
     const selectedTiles = [...gameState.selectedTiles, index];
@@ -561,6 +579,15 @@ const MemoryGame: React.FC = () => {
     handleLevelComplete,
   ]);
 
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (yetiTimeoutRef.current) {
+        clearTimeout(yetiTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Render more specific and helpful hints
   const renderHints = () => {
     if (gameState.level === 2) {
@@ -608,7 +635,7 @@ const MemoryGame: React.FC = () => {
           {gameState.hints.showPatternHint && (
             <div className="bg-blue-100 p-3 rounded-lg text-sm animate-fade-in">
               <span className="font-bold">Level 3 Tip:</span>{" "}
-              {gameState.phase === "pairs"
+              {gameState.level === 3
                 ? "First find all 3 pairs of matching penguins!"
                 : "Now find the 2 triplets of matching penguins!"}
             </div>
@@ -646,16 +673,33 @@ const MemoryGame: React.FC = () => {
 
   // Update the celebration modal content
   const handleCelebrationActions = () => {
-    const currentLeaderboard = leaderboards[gameState.level - 1];
-    const currentBestScore = currentLeaderboard?.data?.find(
-      (entry) => entry.player.toLowerCase() === (account?.toLowerCase() ?? "")
-    );
+    const getLevelDescription = (level: number) => {
+      switch (level) {
+        case 1:
+          return "matched all the penguin pairs";
+        case 2:
+          return "found all the penguin triplets while dodging a yeti";
+        case 3:
+          return "conquered the double yeti challenge with two yetis";
+        default:
+          return "completed the challenge";
+      }
+    };
 
-    const isPenguinCygaar = Math.random() > 0.5;
-    const penguinImage = isPenguinCygaar
-      ? "/images/penguin9.png"
-      : "/images/penguin10.png";
-    const penguinName = isPenguinCygaar ? "Cygaar" : "Luca";
+    const getPlayerName = () => {
+      if (!isConnected) return "0xYourWalletHere";
+      return account || "0xYourWalletHere";
+    };
+
+    const tweetText = encodeURIComponent(
+      `🐧 Just ${getLevelDescription(gameState.level)} in ${
+        gameState.clicks
+      } clicks at the $Cygaar Memory Club!\n\n` +
+        `https://www.abs.xyz/trade/token?address=0x35efa4699edd7b468cbbf4fff7b6e7afc0a7ada6\n\n` +
+        `thanks @0xcygaar & team for building @abstractchain\n\n` +
+        `${getPlayerName()}\n\n` +
+        `Play for yourself: https://www.cygaar.xyz`
+    );
 
     return (
       <div className="max-w-md w-full mx-auto">
@@ -663,8 +707,8 @@ const MemoryGame: React.FC = () => {
           {/* Header */}
           <div className="flex flex-col items-center mb-6">
             <Image
-              src={penguinImage}
-              alt={penguinName}
+              src="/images/penguin9.png"
+              alt="Cygaar"
               width={150}
               height={150}
               className="animate-bounce-gentle mb-4"
@@ -674,17 +718,8 @@ const MemoryGame: React.FC = () => {
               Level {gameState.level} Complete!
             </h2>
             <p className="text-lg mt-2">
-              {isPenguinCygaar
-                ? `${gameState.clicks} clicks? ${
-                    gameState.clicks < 20 ? "not bad anon" : "ngmi ser"
-                  }`
-                : `Great job! You completed it in ${gameState.clicks} clicks!`}
+              Great job! You completed it in {gameState.clicks} clicks!
             </p>
-            {currentBestScore && (
-              <p className="text-sm text-gray-600 mt-2">
-                Your current best: {Number(currentBestScore.score)} clicks
-              </p>
-            )}
           </div>
 
           {/* Action Buttons */}
@@ -734,11 +769,9 @@ const MemoryGame: React.FC = () => {
                   <li>Second transaction: Submit your score</li>
                   <li>Leaderboard updates within ~1 minute</li>
                 </ol>
-                {currentBestScore && (
+                {gameState.submissionStatus && (
                   <p className="mt-3 text-sm text-gray-600">
-                    Only your best scores appear on the leaderboard.
-                    {Number(currentBestScore.score) > gameState.clicks &&
-                      " This score will improve your ranking!"}
+                    {gameState.submissionStatus.message}
                   </p>
                 )}
               </div>
@@ -794,22 +827,12 @@ const MemoryGame: React.FC = () => {
 
           <div className="mt-4 text-center">
             <a
-              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(
-                getTweetMessage()
-              )}`}
+              href={`https://twitter.com/intent/tweet?text=${tweetText}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 bg-blue-400 text-white px-4 py-2 rounded-lg hover:bg-blue-500 transition-colors"
+              className="block w-full px-6 py-3 bg-blue-400 text-white rounded-lg hover:bg-blue-500 transition-colors mt-4"
             >
-              <svg
-                className="w-5 h-5"
-                fill="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" />
-              </svg>
-              Share Score
+              Share on Twitter
             </a>
           </div>
 
@@ -866,7 +889,6 @@ const MemoryGame: React.FC = () => {
             clicks={gameState.clicks}
             level={gameState.level}
             matches={matchCount}
-            phase={gameState.phase}
           />
         </>
       )}
@@ -900,10 +922,7 @@ const MemoryGame: React.FC = () => {
           style={{
             gridTemplateColumns: `repeat(${
               LEVEL_CONFIG[gameState.level as GameLevel].cols
-            }, minmax(0, 1fr))`,
-            width: "100%",
-            maxWidth: "800px",
-            margin: "0 auto",
+            }, 1fr)`,
           }}
         >
           {gameState.tiles.map((tile: Tile) => (
