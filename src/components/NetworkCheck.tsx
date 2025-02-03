@@ -1,10 +1,10 @@
 import { useChainId, useSwitchChain } from "wagmi";
-import { config } from "@/app/providers";
+import { wagmiConfig } from "@/app/providers";
 
 const NetworkCheck: React.FC = () => {
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
-  const ABSTRACT_TESTNET_ID = config.chains[0].id;
+  const ABSTRACT_TESTNET_ID = wagmiConfig.chains[0].id;
 
   // Show warning if connected and not on Abstract testnet
   if (chainId && chainId !== ABSTRACT_TESTNET_ID) {

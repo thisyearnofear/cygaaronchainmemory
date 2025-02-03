@@ -1,4 +1,4 @@
 export const metadata = {
-  title: "Remenguini",
+  title: "Remenguiny",
   description: "A blockchain memory game powered by zkSync & abstract.",
 };

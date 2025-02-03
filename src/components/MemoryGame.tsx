@@ -10,6 +10,7 @@ import MiniLeaderboard from "./MiniLeaderboard";
 import CommentaryOverlay from "./CommentaryOverlay";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useImagePreloader } from "@/hooks/useImagePreloader";
+import { useAbstractWallet } from "@/hooks/useAbstractWallet";
 
 interface Tile {
   id: number;
@@ -189,6 +190,7 @@ const MemoryGame: React.FC = () => {
     usePenguinGameContract();
 
   const { isConnected, address: account } = useAccount();
+  const { login } = useAbstractWallet();
   const [gameState, setGameState] = useState<GameState>({
     level: 1,
     clicks: 0,
@@ -683,7 +685,7 @@ const MemoryGame: React.FC = () => {
     const tweetText = encodeURIComponent(
       `🐧 Just ${getLevelDescription(gameState.level)} in ${
         gameState.clicks
-      } clicks at Remenguini #remenguini\n\n` +
+      } clicks at Remenguiny #Remenguiny\n\n` +
         `https://www.abs.xyz/trade/token?address=0x35efa4699edd7b468cbbf4fff7b6e7afc0a7ada6\n\n` +
         `thanks @0xcygaar & team for building @abstractchain\n\n` +
         `${getPlayerName()}\n\n` +
@@ -828,10 +830,10 @@ const MemoryGame: React.FC = () => {
           {gameState.level === 3 && (
             <div className="mt-6 text-center animate-fade-in">
               <h3 className="text-xl font-bold text-emerald-600 mb-2">
-                🎉 Congratulations! You&apos;ve Completed Remenguini!
+                🎉 Congratulations! You&apos;ve Completed Remenguiny!
               </h3>
               <p className="text-gray-600">
-                You&apos;ve mastered all levels of Remenguini!
+                You&apos;ve mastered all levels of Remenguiny!
               </p>
             </div>
           )}
@@ -847,7 +849,7 @@ const MemoryGame: React.FC = () => {
         <div className="game-info">
           <h2 className="text-2xl font-bold mb-2">
             {gameState.level === 1
-              ? "Welcome to Remenguini"
+              ? "Welcome to Remenguiny"
               : `Ready for Level ${gameState.level}?`}
           </h2>
           <p className="text-lg text-gray-600 mb-4">
@@ -983,6 +985,18 @@ const MemoryGame: React.FC = () => {
       )}
 
       {renderHints()}
+
+      {!isConnected && (
+        <div className="flex gap-4 justify-center">
+          <ConnectButton />
+          <button
+            onClick={() => login()}
+            className="px-6 py-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600"
+          >
+            Connect with Abstract
+          </button>
+        </div>
+      )}
     </div>
   );
 };
