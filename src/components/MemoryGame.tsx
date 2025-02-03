@@ -683,7 +683,7 @@ const MemoryGame: React.FC = () => {
     const tweetText = encodeURIComponent(
       `🐧 Just ${getLevelDescription(gameState.level)} in ${
         gameState.clicks
-      } clicks at the $Cygaar Memory Club #remenguini\n\n` +
+      } clicks at Remenguini #remenguini\n\n` +
         `https://www.abs.xyz/trade/token?address=0x35efa4699edd7b468cbbf4fff7b6e7afc0a7ada6\n\n` +
         `thanks @0xcygaar & team for building @abstractchain\n\n` +
         `${getPlayerName()}\n\n` +
@@ -828,10 +828,10 @@ const MemoryGame: React.FC = () => {
           {gameState.level === 3 && (
             <div className="mt-6 text-center animate-fade-in">
               <h3 className="text-xl font-bold text-emerald-600 mb-2">
-                🎉 Congratulations! You&apos;ve Completed the Game!
+                🎉 Congratulations! You&apos;ve Completed Remenguini!
               </h3>
               <p className="text-gray-600">
-                You&apos;ve mastered all levels of the Cygaar Memory Club!
+                You&apos;ve mastered all levels of Remenguini!
               </p>
             </div>
           )}
@@ -847,7 +847,7 @@ const MemoryGame: React.FC = () => {
         <div className="game-info">
           <h2 className="text-2xl font-bold mb-2">
             {gameState.level === 1
-              ? "Welcome to Cygaar Memory Club"
+              ? "Welcome to Remenguini"
               : `Ready for Level ${gameState.level}?`}
           </h2>
           <p className="text-lg text-gray-600 mb-4">
