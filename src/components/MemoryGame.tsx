@@ -10,7 +10,6 @@ import MiniLeaderboard from "./MiniLeaderboard";
 import CommentaryOverlay from "./CommentaryOverlay";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useImagePreloader } from "@/hooks/useImagePreloader";
-import { useAbstractWallet } from "@/hooks/useAbstractWallet";
 
 interface Tile {
   id: number;
@@ -190,7 +189,6 @@ const MemoryGame: React.FC = () => {
     usePenguinGameContract();
 
   const { isConnected, address: account } = useAccount();
-  const { login } = useAbstractWallet();
   const [gameState, setGameState] = useState<GameState>({
     level: 1,
     clicks: 0,
@@ -985,18 +983,6 @@ const MemoryGame: React.FC = () => {
       )}
 
       {renderHints()}
-
-      {!isConnected && (
-        <div className="flex gap-4 justify-center">
-          <ConnectButton />
-          <button
-            onClick={() => login()}
-            className="px-6 py-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600"
-          >
-            Connect with Abstract
-          </button>
-        </div>
-      )}
     </div>
   );
 };

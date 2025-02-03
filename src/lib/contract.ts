@@ -1,7 +1,7 @@
-import { useWriteContract, useChainId, usePublicClient } from "wagmi";
+import { useWriteContract, useChainId } from "wagmi";
 import { keccak256, type TransactionReceipt, stringToHex } from "viem";
 import { useState, useCallback } from "react";
-import { wagmiConfig } from "@/app/providers";
+import { publicClient } from "@/app/providers";
 
 const PENGUIN_GAME_ABI = [
   {
@@ -73,10 +73,9 @@ export function usePenguinGameContract() {
   const { writeContractAsync } = useWriteContract();
   const [leaderboards, setLeaderboards] = useState<LeaderboardData[]>([]);
   const chainId = useChainId();
-  const publicClient = usePublicClient();
 
   const refreshLeaderboard = useCallback(async () => {
-    if (!chainId || !publicClient) return;
+    if (!chainId) return;
 
     try {
       console.log("Refreshing all leaderboards...");
@@ -102,12 +101,11 @@ export function usePenguinGameContract() {
     } catch (error) {
       console.error("Failed to fetch leaderboard:", error);
     }
-  }, [chainId, publicClient]);
+  }, [chainId]);
 
   const startGame = async (level: number) => {
-    if (!publicClient) throw new Error("Public client not initialized");
-
     try {
+      // Generate a random level hash using viem's utilities
       const levelHash = keccak256(
         stringToHex(
           JSON.stringify({
@@ -140,9 +138,18 @@ export function usePenguinGameContract() {
   const submitScore = async (
     args: [bigint, bigint, `0x${string}`]
   ): Promise<WagmiTransaction> => {
-    if (!publicClient) throw new Error("Public client not initialized");
-
     try {
+      console.log("Current leaderboard scores:", {
+        level: Number(args[0]),
+        newScore: Number(args[1]),
+        existingScores: leaderboards[Number(args[0]) - 1]?.data?.map(
+          (entry) => ({
+            player: entry.player,
+            score: Number(entry.score),
+          })
+        ),
+      });
+
       console.log("Submitting score:", {
         level: Number(args[0]),
         clicks: Number(args[1]),
@@ -156,18 +163,38 @@ export function usePenguinGameContract() {
         args,
       });
 
+      console.log("Score submission transaction hash:", hash);
+
       return {
         hash,
         wait: async () => {
-          const receipt = await publicClient.waitForTransactionReceipt({
-            hash,
+          const receipt = await window.ethereum!.request({
+            method: "eth_getTransactionReceipt",
+            params: [hash],
           });
+          console.log("Transaction receipt:", receipt);
 
-          if (receipt.status === "success") {
-            await refreshLeaderboard();
+          // Type-safe status check
+          const status = receipt?.status as TransactionStatus;
+          const isSuccess =
+            status === "success" || status === 1 || status === "0x1";
+
+          if (isSuccess) {
+            // Refresh the appropriate leaderboard
+            const level = Number(args[0]);
+            console.log(`Refreshing leaderboard for level ${level}`);
+
+            try {
+              await refreshLeaderboard();
+              console.log("Leaderboard refresh completed");
+            } catch (error) {
+              console.error("Failed to refresh leaderboard:", error);
+            }
+          } else {
+            console.error("Transaction failed with status:", status);
           }
 
-          return receipt;
+          return receipt as TransactionReceipt;
         },
       };
     } catch (error) {

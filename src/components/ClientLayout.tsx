@@ -7,9 +7,7 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen">
       <header className="w-full p-6 bg-white/80 shadow-lg mb-8">
         <div className="container mx-auto flex justify-center items-center">
-          <h1 className="text-3xl font-bold text-sky-900">
-            🐧 Cygaar Memory Club
-          </h1>
+          <h1 className="text-3xl font-bold text-sky-900">🐧 Remenguiny</h1>
         </div>
       </header>
       <main>{children}</main>
