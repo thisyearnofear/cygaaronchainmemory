@@ -249,3 +249,32 @@
 .music-player-container {
   @apply mt-8 w-full flex justify-center;
 }
+
+.speech-bubble {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.speech-bubble-right::after {
+  content: "";
+  position: absolute;
+  right: -10px;
+  bottom: 20px;
+  border-width: 10px;
+  border-style: solid;
+  border-color: transparent transparent transparent rgba(255, 255, 255, 0.9);
+}
+
+.speech-bubble-left::after {
+  content: "";
+  position: absolute;
+  left: -10px;
+  bottom: 20px;
+  border-width: 10px;
+  border-style: solid;
+  border-color: transparent rgba(255, 255, 255, 0.9) transparent transparent;
+}
+
+.group:hover .group-hover\:opacity-100 {
+  opacity: 1;
+}

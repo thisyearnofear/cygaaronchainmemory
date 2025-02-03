@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 const MusicPlayer: React.FC = () => {
-  const [isMinimized, setIsMinimized] = useState(false);
   const playerRef = useRef<HTMLDivElement>(null);
   const baseTrackUrl = "https://futuretape.xyz/embed/search/matthew%20chaim";
 
@@ -35,12 +34,6 @@ const MusicPlayer: React.FC = () => {
         ref={playerRef}
         className="w-[350px] h-[40px] bg-black/50 rounded-lg overflow-hidden"
       />
-      <button
-        onClick={() => setIsMinimized(!isMinimized)}
-        className="mt-2 bg-white/90 hover:bg-white px-4 py-1 rounded-full shadow-lg transition-colors"
-      >
-        {isMinimized ? "▲" : "▼"}
-      </button>
     </div>
   );
 };

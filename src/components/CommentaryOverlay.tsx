@@ -28,6 +28,26 @@ const LUCA_EARLY_COMMENTS = [
   "Practice makes perfect! 🌈",
   "Keep that concentration going! 🧠",
   "You're on the right track! 🛤️",
+  "Each click brings you closer to victory! 🎯",
+  "Your memory skills are growing stronger! 💪",
+  "I believe in you, keep going! ⭐",
+  "You're getting better with every match! 🌟",
+  "That's the way to do it! 🎮",
+  "You're a natural at this! 🏆",
+  "Keep that focus going! 🧠",
+  "You've got this rhythm down! 🎵",
+  "WAGMI with those memory skills! 🚀",
+  "Your brain is more liquid than a DEX! 💧",
+  "Bullish on your progress! 📈",
+  "You're as stable as a blue chip! 💎",
+  "Staking your claim on the leaderboard! 🏆",
+  "Your memory's stronger than cold storage! 🧊",
+  "Building blocks of success, just like L2s! 🏗️",
+  "More reliable than mainnet gas fees! ⛽",
+  "Scaling better than zkSync! ⚡",
+  "Your skills are mooning! 🌕",
+  "Diamond hands, diamond mind! 💎🧠",
+  "Proof of Memory in action! ✨",
 ] as const;
 
 const LUCA_MATCH_COMMENTS = [
@@ -52,6 +72,36 @@ const CYGAAR_GENERAL_COMMENTS = [
   "memory.exe has stopped working 💻",
   "this is why we can't have nice things 🤦‍♂️",
   "my toaster has better memory than this 🍞",
+  "even my pet rock's highscore is better than this 🪨",
+  "ser... have you tried using your brain? 🤔",
+  "watching paint dry would be more exciting 🎨",
+  "certified smol brain moment 🧠",
+  "anon discovers memory game, instantly regrets 📸",
+  "this is peak comedy right here 🎭",
+  "your memory is as reliable as eth gas fees ⛽",
+  "ngmi with those memory skills fren 🥱",
+  "maybe stick to rock paper scissors? ✂️",
+  "404: memory not found 🔍",
+  "have you considered a career in professional clicking? 🖱️",
+  "this is why we can't have nice things 🤦‍♂️",
+  "ngmi with that memory ser 📉",
+  "more rugs than a carpet store 🤦‍♂️",
+  "paper hands, paper brain 📜",
+  "down bad worse than ICO investors 💸",
+  "ser... have you tried turning your brain off and on? 🔄",
+  "getting rekt harder than leverage traders 📊",
+  "more lost than eth in a wrong address 💀",
+  "your brain running on solana? 🐌",
+  "getting rugged by your own memory 🏃‍♂️",
+  "this is why we stick to hodling 💎",
+  "more gas spent than an eth whale 🐋",
+  "your brain needs a hard fork 🍴",
+  "getting frontrun by a yeti 🦍",
+  "ser... this is a casino 🎰",
+  "few understand (your gameplay) 🤔",
+  "probably nothing (your score) 👀",
+  "more bearish than 2018 💔",
+  "ngmi harder than safemoon 🌚",
 ] as const;
 
 const CYGAAR_LEVEL2_COMMENTS = [
@@ -117,6 +167,8 @@ const CommentaryOverlay: React.FC<CommentaryOverlayProps> = memo(
       matches: 0,
       timestamp: 0,
     });
+    const [isRightSide, setIsRightSide] = useState(true);
+    const [isVisible, setIsVisible] = useState(true);
 
     const getComment: GetCommentFunction = useCallback(() => {
       const now = Date.now();
@@ -237,6 +289,7 @@ const CommentaryOverlay: React.FC<CommentaryOverlayProps> = memo(
         setPosition(getRandomPosition());
         setKey((prev) => prev + 1);
         setCurrentComment(newComment);
+        setIsVisible(true);
         setLastCommentAt({
           clicks,
           matches,
@@ -245,7 +298,7 @@ const CommentaryOverlay: React.FC<CommentaryOverlayProps> = memo(
       }
     }, [clicks, matches, getComment, getRandomPosition]);
 
-    if (!currentComment) return null;
+    if (!currentComment || !isVisible) return null;
 
     return (
       <div
@@ -257,9 +310,24 @@ const CommentaryOverlay: React.FC<CommentaryOverlayProps> = memo(
           transform: "translate(-50%, -50%)",
           maxWidth: "calc(100vw - 40px)",
           maxHeight: "calc(100vh - 40px)",
+          flexDirection: isRightSide ? "row" : "row-reverse",
         }}
       >
-        <div className="bg-white/90 p-4 rounded-lg shadow-lg relative speech-bubble">
+        <div
+          className={`bg-white/90 p-4 rounded-lg shadow-lg relative speech-bubble group ${
+            isRightSide ? "speech-bubble-right" : "speech-bubble-left"
+          }`}
+          onClick={() => setIsRightSide(!isRightSide)}
+        >
+          <button
+            className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsVisible(false);
+            }}
+          >
+            ✕
+          </button>
           <div className="text-sm font-bold mb-1">{currentComment.name}</div>
           <div className="text-sm">{currentComment.comment}</div>
         </div>
