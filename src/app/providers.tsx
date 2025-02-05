@@ -3,17 +3,16 @@
 import {
   RainbowKitProvider,
   connectorsForWallets,
-  darkTheme,
 } from "@rainbow-me/rainbowkit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createConfig, WagmiProvider } from "wagmi";
-import { createClient, http, createPublicClient } from "viem";
-import { eip712WalletActions } from "viem/zksync";
+import { createConfig, http, WagmiProvider } from "wagmi";
+import { mainnet } from "wagmi/chains";
+import { createPublicClient } from "viem";
 import { abstractWallet } from "@abstract-foundation/agw-react/connectors";
 import "@rainbow-me/rainbowkit/styles.css";
+import { useState, useEffect } from "react";
 
-// Export the chain configuration
-export const abstractTestnet = {
+const abstractTestnet = {
   id: 11124,
   name: "Abstract Testnet",
   network: "abstract-testnet",
@@ -25,18 +24,22 @@ export const abstractTestnet = {
   rpcUrls: {
     default: {
       http: [
+        "https://api.testnet.abs.xyz",
         "https://frequent-withered-surf.abstract-testnet.quiknode.pro/c980208c0896a2be88b9ea59315aa350d415d4f1",
+        "https://abstract-testnet.g.alchemy.com/v2/Tx9luktS3qyIwEKVtjnQrpq8t3MNEV-B",
       ],
     },
-    public: {
-      http: [
-        "https://frequent-withered-surf.abstract-testnet.quiknode.pro/c980208c0896a2be88b9ea59315aa350d415d4f1",
-      ],
+  },
+  blockExplorers: {
+    default: {
+      name: "Abscan",
+      url: "https://sepolia.abscan.org",
     },
-    quicknode: {
-      http: [
-        "https://frequent-withered-surf.abstract-testnet.quiknode.pro/c980208c0896a2be88b9ea59315aa350d415d4f1",
-      ],
+  },
+  contracts: {
+    multicall3: {
+      address: "0xcA11bde05977b3631167028862bE2a173976CA11" as `0x${string}`,
+      blockCreated: 1_234_567,
     },
   },
 } as const;
@@ -52,43 +55,39 @@ const connectors = connectorsForWallets(
   {
     appName: "Remenguini",
     projectId: "1ac4e0e446668e1e32011669ebc982dc",
-    appDescription: "A blockchain memory game powered by Abstract",
-    appUrl: "https://remenguini.xyz",
   }
 );
-
-// Add debug logging after config creation
-console.log("Wallet Configuration:", {
-  chains: [abstractTestnet],
-  connectors: connectors,
-});
 
 // Create wagmi config
 export const config = createConfig({
   connectors,
-  chains: [abstractTestnet],
-  client({ chain }) {
-    return createClient({
-      chain,
-      transport: http(),
-    }).extend(eip712WalletActions());
+  chains: [abstractTestnet, mainnet],
+  transports: {
+    [abstractTestnet.id]: http(),
+    [mainnet.id]: http(),
   },
-  ssr: true,
 });
 
-// Create public client
+// Create a proper public client using viem
 export const publicClient = createPublicClient({
   chain: abstractTestnet,
-  transport: http(),
+  transport: http(abstractTestnet.rpcUrls.default.http[0]),
 });
 
-const queryClient = new QueryClient();
-
 export function Providers({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+  const [queryClient] = useState(() => new QueryClient());
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
+
   return (
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider theme={darkTheme()}>{children}</RainbowKitProvider>
+        <RainbowKitProvider>{children}</RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );

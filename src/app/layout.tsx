@@ -4,16 +4,23 @@ import ClientLayout from "@/components/ClientLayout";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Remenguini",
+  title: "🐧 Remenguiny",
   description: "A blockchain memory game powered by Abstract",
-  manifest: "/manifest.json",
   icons: {
     icon: [
-      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
+      {
+        url: "/favicon.ico",
+        sizes: "any",
+      },
     ],
-    shortcut: ["/favicon.ico"],
+    apple: [
+      {
+        url: "/apple-touch-icon.png",
+        sizes: "180x180",
+      },
+    ],
   },
+  manifest: "/site.webmanifest",
 };
 
 export default function RootLayout({

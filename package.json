@@ -21,6 +21,7 @@
     "next": "15.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-hot-toast": "^2.5.1",
     "viem": "2.x",
     "wagmi": "^2.14.9"
   },

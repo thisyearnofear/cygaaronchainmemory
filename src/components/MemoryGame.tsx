@@ -10,6 +10,8 @@ import MiniLeaderboard from "./MiniLeaderboard";
 import CommentaryOverlay from "./CommentaryOverlay";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useImagePreloader } from "@/hooks/useImagePreloader";
+import { GameError } from "@/lib/contract";
+import { toast } from "react-hot-toast";
 
 interface Tile {
   id: number;
@@ -505,17 +507,31 @@ const MemoryGame: React.FC = () => {
         },
         leaderboardKey: Date.now(),
       }));
-    } catch (error) {
-      console.error("Score submission error:", error);
+    } catch (err) {
+      // First cast to unknown, then to GameError
+      const error = err as unknown as GameError;
+
+      // Handle different error types
+      switch (error.type) {
+        case "user_rejected":
+          // Optionally show a subtle toast or do nothing
+          break;
+
+        case "network":
+          toast.error(error.message);
+          break;
+
+        case "unknown":
+        default:
+          toast.error("Something went wrong. Please try again.");
+          break;
+      }
+
+      // Allow the game to continue
       setCompletionState((prev) => ({ ...prev, isSubmitting: false }));
       setGameState((prev) => ({
         ...prev,
-        submissionStatus: {
-          success: false,
-          message:
-            error instanceof Error ? error.message : "Failed to submit score",
-          showLeaderboard: false,
-        },
+        showCelebration: false,
       }));
     }
   };
@@ -869,87 +885,86 @@ const MemoryGame: React.FC = () => {
 
   return (
     <div className="game-container">
-      <NetworkCheck>
-        {gameState.gameStarted && (
+      <NetworkCheck />
+
+      {gameState.gameStarted && (
+        <>
+          <MiniLeaderboard level={gameState.level} />
+          <CommentaryOverlay
+            clicks={gameState.clicks}
+            level={gameState.level}
+            matches={matchCount}
+          />
+        </>
+      )}
+
+      <div className="game-info">
+        <h2 className="text-2xl font-bold mb-2">Level {gameState.level}</h2>
+        <div className="mb-2">Clicks: {gameState.clicks}</div>
+        <div className="mb-4 text-gray-600">
+          {gameState.level === 1
+            ? "Find matching pairs of penguins. Click two tiles to reveal them."
+            : gameState.level === 2
+            ? "Find triplets of matching penguins. Watch out for yetis!"
+            : "Final Challenge: Find all pairs while avoiding TWO yetis! Watch out - they'll reset your progress!"}
+        </div>
+        {!gameState.gameStarted && (
           <>
-            <MiniLeaderboard level={gameState.level} />
-            <CommentaryOverlay
-              clicks={gameState.clicks}
-              level={gameState.level}
-              matches={matchCount}
-            />
+            <button
+              onClick={handleStartGame}
+              className="px-6 py-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors mb-4"
+            >
+              Start Game
+            </button>
+            <LeaderboardDisplay refreshKey={gameState.leaderboardKey} />
           </>
         )}
+      </div>
 
-        <div className="game-info">
-          <h2 className="text-2xl font-bold mb-2">Level {gameState.level}</h2>
-          <div className="mb-2">Clicks: {gameState.clicks}</div>
-          <div className="mb-4 text-gray-600">
-            {gameState.level === 1
-              ? "Find matching pairs of penguins. Click two tiles to reveal them."
-              : gameState.level === 2
-              ? "Find triplets of matching penguins. Watch out for yetis!"
-              : "Final Challenge: Find all pairs while avoiding TWO yetis! Watch out - they'll reset your progress!"}
-          </div>
-          {!gameState.gameStarted && (
-            <>
-              <button
-                onClick={handleStartGame}
-                className="px-6 py-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors mb-4"
-              >
-                Start Game
-              </button>
-              <LeaderboardDisplay refreshKey={gameState.leaderboardKey} />
-            </>
-          )}
+      {gameState.gameStarted && (
+        <div
+          className="game-grid"
+          style={{
+            gridTemplateColumns: `repeat(${
+              LEVEL_CONFIG[gameState.level as GameLevel].cols
+            }, 1fr)`,
+          }}
+        >
+          {gameState.tiles.map((tile: Tile) => (
+            <div
+              key={tile.id}
+              onClick={() => handleTileClick(tile.id)}
+              data-wrong-attempts={gameState.wrongAttempts[tile.id] || 0}
+              className={`game-tile 
+                ${tile.revealed || tile.matched ? "revealed" : ""} 
+                ${tile.matched ? "matched" : ""}
+                ${
+                  !tile.matched && gameState.wrongAttempts[tile.id] > 2
+                    ? "animate-wrong-match-severe"
+                    : ""
+                }
+                ${
+                  !tile.matched && gameState.wrongAttempts[tile.id] === 2
+                    ? "animate-wrong-match"
+                    : ""
+                }
+              `}
+            >
+              {(tile.revealed || tile.matched) && (
+                <Image
+                  src={`/images/penguin${tile.value}.png`}
+                  alt={`Penguin ${tile.value}`}
+                  width={150}
+                  height={150}
+                  className={`penguin-image ${tile.matched ? "matched" : ""}`}
+                  priority={true}
+                  loading="eager"
+                />
+              )}
+            </div>
+          ))}
         </div>
-
-        {/* Add back the game grid */}
-        {gameState.gameStarted && (
-          <div
-            className="game-grid"
-            style={{
-              gridTemplateColumns: `repeat(${
-                LEVEL_CONFIG[gameState.level as GameLevel].cols
-              }, 1fr)`,
-            }}
-          >
-            {gameState.tiles.map((tile: Tile) => (
-              <div
-                key={tile.id}
-                onClick={() => handleTileClick(tile.id)}
-                data-wrong-attempts={gameState.wrongAttempts[tile.id] || 0}
-                className={`game-tile 
-                  ${tile.revealed || tile.matched ? "revealed" : ""} 
-                  ${tile.matched ? "matched" : ""}
-                  ${
-                    !tile.matched && gameState.wrongAttempts[tile.id] > 2
-                      ? "animate-wrong-match-severe"
-                      : ""
-                  }
-                  ${
-                    !tile.matched && gameState.wrongAttempts[tile.id] === 2
-                      ? "animate-wrong-match"
-                      : ""
-                  }
-                `}
-              >
-                {(tile.revealed || tile.matched) && (
-                  <Image
-                    src={`/images/penguin${tile.value}.png`}
-                    alt={`Penguin ${tile.value}`}
-                    width={150}
-                    height={150}
-                    className={`penguin-image ${tile.matched ? "matched" : ""}`}
-                    priority={true}
-                    loading="eager"
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </NetworkCheck>
+      )}
 
       {gameState.showYeti && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">

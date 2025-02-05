@@ -1,11 +1,14 @@
+import { useWriteContract, useChainId } from "wagmi";
 import {
-  useAbstractClient,
-  useGlobalWalletSignerAccount,
-} from "@abstract-foundation/agw-react";
-import { useWriteContract, useChainId, useAccount } from "wagmi";
-import { keccak256, type TransactionReceipt, stringToHex } from "viem";
-import { useState, useCallback, useEffect } from "react";
+  keccak256,
+  type TransactionReceipt,
+  stringToHex,
+  createPublicClient,
+  http,
+} from "viem";
+import { useState, useCallback } from "react";
 import { publicClient } from "@/app/providers";
+import { abstractTestnet } from "wagmi/chains";
 
 const PENGUIN_GAME_ABI = [
   {
@@ -46,74 +49,15 @@ const PENGUIN_GAME_ABI = [
     stateMutability: "view",
     type: "function",
   },
-  {
-    inputs: [{ internalType: "address", name: "eoa", type: "address" }],
-    name: "associateWallet",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [{ internalType: "address", name: "wallet", type: "address" }],
-    name: "getActualPlayer",
-    outputs: [{ internalType: "address", name: "", type: "address" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [{ internalType: "address", name: "wallet", type: "address" }],
-    name: "activeSessions",
-    outputs: [
-      {
-        components: [
-          { internalType: "uint256", name: "startTime", type: "uint256" },
-          { internalType: "bytes32", name: "levelHash", type: "bytes32" },
-          { internalType: "bool", name: "isComplete", type: "bool" },
-          { internalType: "uint256", name: "clickCount", type: "uint256" },
-          { internalType: "address", name: "actualPlayer", type: "address" },
-        ],
-        internalType: "struct PenguinGame.GameSession",
-        name: "",
-        type: "tuple",
-      },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
 ] as const;
 
-// Update network-specific contract addresses
-const CONTRACT_ADDRESSES = {
-  11124: "0xef95c894e210251c0736d3D432C3151D684AD8F5", // Abstract Testnet
-  2741: "0x...", // Abstract Mainnet (when ready)
-} as const;
+const CONTRACT_ADDRESS = "0xFae263fE7ae81169119aC43e6523d51eaBC9b6D2" as const;
 
-// Use dynamic contract address based on network
-const getContractAddress = (chainId: number) => {
-  const address =
-    CONTRACT_ADDRESSES[chainId as keyof typeof CONTRACT_ADDRESSES];
-  if (!address) throw new Error(`No contract address for chain ${chainId}`);
-  return address;
-};
-
+// Update WagmiTransaction type to match zkSync receipt format
 type WagmiTransaction = {
   hash: `0x${string}`;
   wait: () => Promise<TransactionReceipt>;
 };
-
-// Remove unused types
-type ErrorWithMessage = {
-  message?: string;
-  code?: string | number;
-  reason?: string;
-  shortMessage?: string;
-} & Error;
-
-type AbstractWalletError = {
-  message: string;
-  code?: number | string;
-  data?: unknown;
-} & Error;
 
 export type LeaderboardEntry = {
   player: `0x${string}`;
@@ -125,99 +69,24 @@ export type LeaderboardData = {
   data: readonly LeaderboardEntry[];
 };
 
-// Define strict types for transaction status
-type EthereumTransactionStatus = 1 | 0 | "0x1" | "0x0";
+// Add a more specific error type
+type ContractError = {
+  message?: string;
+  code?: string | number;
+  details?: string;
+  data?: unknown;
+} & Error;
 
-// Helper function to check transaction success
-const isTransactionSuccessful = (
-  receipt: TransactionReceipt | { status: EthereumTransactionStatus }
-): boolean => {
-  if (!receipt.status) return false;
-
-  // Handle viem TransactionReceipt status
-  if (typeof receipt.status === "string") {
-    return receipt.status === "success";
-  }
-
-  // Handle Ethereum transaction status
-  return receipt.status === 1 || receipt.status === "0x1";
+// Add a custom error type for user-friendly messages
+export type GameError = {
+  type: "user_rejected" | "network" | "unknown";
+  message: string;
 };
 
 export function usePenguinGameContract() {
   const { writeContractAsync } = useWriteContract();
-  const { data: abstractClient, isLoading: isAbstractLoading } =
-    useAbstractClient();
-  const { address: signerAddress, isConnected: isSignerConnected } =
-    useGlobalWalletSignerAccount();
-  const { connector } = useAccount();
   const [leaderboards, setLeaderboards] = useState<LeaderboardData[]>([]);
   const chainId = useChainId();
-  const [isWalletReady, setIsWalletReady] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
-
-  // Enhanced initialization check
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    const connectorId = connector?.id; // Destructure to avoid object reference changes
-
-    const checkInitialization = async () => {
-      if (connectorId === "abstract") {
-        try {
-          if (abstractClient && isSignerConnected) {
-            const account = await abstractClient.account;
-            const chain = await abstractClient.chain;
-
-            if (account && chain) {
-              console.log("Abstract wallet initialized:", {
-                account: account.address,
-                chain: chain.id,
-                signer: signerAddress,
-              });
-              setIsInitialized(true);
-              return;
-            }
-          }
-          // If not initialized, try again in 1 second
-          timeoutId = setTimeout(checkInitialization, 1000);
-        } catch (error) {
-          console.log("Initialization check failed:", error);
-          timeoutId = setTimeout(checkInitialization, 1000);
-        }
-      }
-    };
-
-    checkInitialization();
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [abstractClient, isSignerConnected, signerAddress, connector?.id]); // Add connector?.id to deps
-
-  // Add initialization check
-  useEffect(() => {
-    if (connector?.id === "abstract") {
-      const checkWalletReady = async () => {
-        try {
-          if (abstractClient && isSignerConnected) {
-            // Check if we can access the account
-            const account = await abstractClient.account;
-            if (account) {
-              console.log("Abstract wallet ready:", {
-                account: account.address,
-                signer: signerAddress,
-                chainId,
-              });
-              setIsWalletReady(true);
-            }
-          }
-        } catch (error) {
-          console.log("Wallet not ready yet:", error);
-          setIsWalletReady(false);
-        }
-      };
-
-      checkWalletReady();
-    }
-  }, [abstractClient, isSignerConnected, signerAddress, chainId]);
 
   const refreshLeaderboard = useCallback(async () => {
     if (!chainId) return;
@@ -229,7 +98,7 @@ export function usePenguinGameContract() {
       for (let level = 1; level <= 3; level++) {
         try {
           const data = (await publicClient.readContract({
-            address: getContractAddress(chainId),
+            address: CONTRACT_ADDRESS,
             abi: PENGUIN_GAME_ABI,
             functionName: "getLeaderboard",
             args: [BigInt(level)],
@@ -250,94 +119,28 @@ export function usePenguinGameContract() {
 
   const startGame = async (level: number) => {
     try {
-      const isAbstractWallet = connector?.id === "abstract";
-
-      if (isAbstractWallet) {
-        if (!isInitialized) {
-          console.log("Waiting for wallet initialization...");
-          throw new Error("Please wait for wallet initialization");
-        }
-
-        if (!abstractClient || !isSignerConnected) {
-          throw new Error("Wallet not properly connected");
-        }
-      }
-
-      // Generate level hash with more entropy
+      // Generate a random level hash using viem's utilities
       const levelHash = keccak256(
         stringToHex(
           JSON.stringify({
             level,
             timestamp: Date.now(),
             random: Math.random(),
-            nonce: Date.now() + Math.random(),
           })
         )
       );
 
-      console.log("Starting game with Abstract Wallet:", {
-        level,
-        levelHash,
-        wallet: abstractClient?.account?.address,
-        signer: signerAddress,
-        isWalletReady,
-        chainId,
-      });
+      console.log("Starting game session...", { level, levelHash });
 
-      if (isAbstractWallet && abstractClient && isSignerConnected) {
-        try {
-          // Use Abstract's writeContract method directly
-          const hash = await abstractClient.writeContract({
-            address: getContractAddress(chainId),
-            abi: PENGUIN_GAME_ABI,
-            functionName: "startGame",
-            args: [BigInt(level), levelHash],
-          });
-
-          console.log("Transaction submitted:", {
-            hash,
-            from: abstractClient.account?.address,
-            to: getContractAddress(chainId),
-            signer: signerAddress,
-            chainId,
-          });
-
-          const receipt = await publicClient.waitForTransactionReceipt({
-            hash,
-            timeout: 60_000,
-            confirmations: 3,
-          });
-
-          console.log("Transaction receipt:", receipt);
-
-          if (!isTransactionSuccessful(receipt)) {
-            throw new Error("Failed to start game session");
-          }
-
-          return hash;
-        } catch (error: unknown) {
-          const abstractError = error as AbstractWalletError;
-          console.error("Abstract wallet error:", {
-            error: abstractError,
-            code: abstractError.code,
-            data: abstractError.data,
-            message: abstractError.message,
-          });
-          throw abstractError;
-        }
-      }
-
-      // Regular wallet flow
       const hash = await writeContractAsync({
-        address: getContractAddress(chainId),
+        address: CONTRACT_ADDRESS,
         abi: PENGUIN_GAME_ABI,
         functionName: "startGame",
         args: [BigInt(level), levelHash],
       });
 
       // Wait for transaction to be mined
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      console.log("Start game receipt:", receipt);
+      await publicClient.waitForTransactionReceipt({ hash });
 
       return hash;
     } catch (error) {
@@ -350,80 +153,134 @@ export function usePenguinGameContract() {
     args: [bigint, bigint, `0x${string}`]
   ): Promise<WagmiTransaction> => {
     try {
-      console.log("Submitting score with args:", args);
-      const isAbstractWallet = connector?.id === "abstract";
-
-      if (isAbstractWallet && abstractClient && isSignerConnected) {
-        try {
-          // Use Abstract's writeContract method directly
-          const hash = await abstractClient.writeContract({
-            address: getContractAddress(chainId),
-            abi: PENGUIN_GAME_ABI,
-            functionName: "submitScore",
-            args,
-          });
-
-          console.log("Transaction hash:", hash);
-
-          return {
-            hash,
-            wait: async () => {
-              const receipt = await publicClient.waitForTransactionReceipt({
-                hash,
-                timeout: 60_000,
-                confirmations: 2,
-              });
-
-              console.log("Transaction receipt:", receipt);
-
-              if (isTransactionSuccessful(receipt)) {
-                await refreshLeaderboard();
-              } else {
-                console.error("Transaction failed:", receipt);
-                throw new Error("Transaction failed");
-              }
-
-              return receipt;
-            },
-          };
-        } catch (error: unknown) {
-          const abstractError = error as AbstractWalletError;
-          console.error("Abstract wallet error:", {
-            error: abstractError,
-            code: abstractError.code,
-            data: abstractError.data,
-            message: abstractError.message,
-          });
-          throw abstractError;
-        }
-      }
-
-      // Regular wallet submission
       const hash = await writeContractAsync({
-        address: getContractAddress(chainId),
+        address: CONTRACT_ADDRESS,
         abi: PENGUIN_GAME_ABI,
         functionName: "submitScore",
         args,
+        gas: BigInt(300000),
       });
 
       return {
         hash,
         wait: async () => {
-          const receipt = await window.ethereum!.request({
-            method: "eth_getTransactionReceipt",
-            params: [hash],
-          });
+          const rpcUrls = abstractTestnet.rpcUrls.default.http;
+          let receipt = null;
+          let lastError: Error | null = null;
 
-          if (receipt && isTransactionSuccessful(receipt)) {
-            await refreshLeaderboard();
+          for (let attempt = 0; attempt < 3; attempt++) {
+            for (const rpc of rpcUrls) {
+              try {
+                const client = createPublicClient({
+                  chain: abstractTestnet,
+                  transport: http(rpc),
+                });
+
+                receipt = await client.waitForTransactionReceipt({
+                  hash,
+                  timeout: 30_000,
+                  retryDelay: 2_000,
+                });
+
+                if (receipt) break;
+              } catch (err) {
+                const error = err as Error;
+                console.warn(
+                  `Attempt ${attempt + 1} failed for ${rpc}:`,
+                  error
+                );
+                lastError = error;
+                await new Promise((resolve) =>
+                  setTimeout(resolve, 2000 * (attempt + 1))
+                );
+                continue;
+              }
+            }
+            if (receipt) break;
           }
 
-          return receipt as TransactionReceipt;
+          if (!receipt) {
+            console.error("All RPC attempts failed:", lastError);
+            throw new Error("Failed to get transaction receipt from all RPCs");
+          }
+
+          // Ensure all required fields are present with correct types
+          const standardReceipt: TransactionReceipt = {
+            ...receipt,
+            blockHash:
+              receipt.blockHash ||
+              "0x0000000000000000000000000000000000000000000000000000000000000000",
+            blockNumber: receipt.blockNumber || BigInt(0),
+            contractAddress: receipt.contractAddress || null,
+            from: receipt.from,
+            status: receipt.status,
+            to: receipt.to || null,
+            transactionHash: receipt.transactionHash,
+            transactionIndex: receipt.transactionIndex || 0,
+            logs: receipt.logs.map((log) => ({
+              ...log,
+              blockHash: log.blockHash || receipt.blockHash,
+              blockNumber: log.blockNumber || receipt.blockNumber || BigInt(0),
+              logIndex: log.logIndex || 0,
+              removed: false,
+              transactionHash: log.transactionHash || receipt.transactionHash,
+              transactionIndex:
+                log.transactionIndex || receipt.transactionIndex || 0,
+            })),
+          };
+
+          // Handle different status formats more safely
+          const statusString = String(standardReceipt.status).toLowerCase();
+          const numericStatus = Number(standardReceipt.status);
+          const isSuccess =
+            statusString === "success" ||
+            statusString === "1" ||
+            statusString === "0x1" ||
+            numericStatus === 1;
+
+          if (isSuccess) {
+            await refreshLeaderboard();
+          } else {
+            console.error(
+              "Transaction failed with status:",
+              standardReceipt.status
+            );
+          }
+
+          return standardReceipt;
         },
       };
-    } catch (error) {
+    } catch (err) {
+      const error = err as unknown as ContractError;
+
+      // Handle user rejection with a cleaner error
+      if (typeof error.message === "string") {
+        if (
+          error.message.toLowerCase().includes("user denied") ||
+          error.message.toLowerCase().includes("user rejected")
+        ) {
+          const gameError: GameError = {
+            type: "user_rejected",
+            message: "Transaction cancelled",
+          };
+          throw gameError;
+        }
+        if (error.message.includes("insufficient funds")) {
+          const gameError: GameError = {
+            type: "network",
+            message: "Insufficient funds",
+          };
+          throw gameError;
+        }
+      }
+
+      // Handle other errors
       console.error("Score submission error:", error);
-      handleError(error as ErrorWithMessage);
+      const gameError: GameError = {
+        type: "unknown",
+        message: "Failed to submit score",
+      };
+      throw gameError;
     }
   };
 
@@ -432,17 +289,5 @@ export function usePenguinGameContract() {
     refreshLeaderboard,
     startGame,
     submitScore,
-    isAbstractLoading,
   };
-}
-
-// Use handleError in startGame and submitScore
-function handleError(error: ErrorWithMessage | null): never {
-  if (!error) throw new Error("Unknown error");
-
-  if (error.message?.includes("User denied")) {
-    throw new Error("Transaction rejected");
-  }
-
-  throw error;
 }
