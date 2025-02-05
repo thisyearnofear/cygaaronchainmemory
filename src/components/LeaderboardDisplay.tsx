@@ -1,6 +1,10 @@
 "use client";
 
-import { usePenguinGameContract } from "@/lib/contract";
+import {
+  usePenguinGameContract,
+  type LeaderboardEntry,
+  type LeaderboardData,
+} from "@/lib/contract";
 import { useState, useEffect } from "react";
 import { useAccount } from "wagmi";
 
@@ -130,15 +134,12 @@ const LeaderboardDisplay: React.FC<LeaderboardDisplayProps> = ({
             address: entry.player,
             score: Number(entry.score),
           })) || [],
-        currentUserAddress: address,
-        hasCurrentUser: board.data?.some((entry) => entry.player === address),
-        rawData: board.data,
       })),
       timestamp: new Date().toISOString(),
     });
-  }, [leaderboards, address]);
+  }, [leaderboards]);
 
-  // Don't auto-load leaderboards
+  // Load leaderboards on refresh key change
   useEffect(() => {
     if (refreshKey !== undefined) {
       refreshLeaderboard();
@@ -186,6 +187,38 @@ const LeaderboardDisplay: React.FC<LeaderboardDisplayProps> = ({
     return <div>Loading leaderboards...</div>;
   }
 
+  // Type-safe board rendering
+  const renderBoard = (board: LeaderboardData) => (
+    <div key={board.level} className="bg-white/50 rounded-lg p-4">
+      <div className="flex justify-between items-center mb-2">
+        <h4 className="font-bold">Level {board.level}</h4>
+      </div>
+
+      {board.data.length === 0 ? (
+        <p className="text-gray-500 italic">No scores yet</p>
+      ) : (
+        <div className="space-y-2">
+          {board.data.map((entry: LeaderboardEntry, index: number) => (
+            <div
+              key={`${entry.player}-${index}`}
+              className={`flex justify-between items-center p-2 ${
+                entry.player === address ? "bg-green-100/50" : "bg-white/30"
+              } rounded`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="font-bold">{index + 1}.</span>
+                <span className="font-mono">
+                  {resolvedNames[entry.player] || entry.player}
+                </span>
+              </div>
+              <span className="font-bold">{entry.score} clicks</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div
       className={`bg-white/80 rounded-xl shadow-lg p-6 mt-4 transition-colors duration-500 
@@ -205,45 +238,7 @@ const LeaderboardDisplay: React.FC<LeaderboardDisplayProps> = ({
         Complete levels in fewer clicks to climb the leaderboard!
       </p>
 
-      <div className="space-y-6">
-        {leaderboards.map((board) => (
-          <div key={board.level} className="bg-white/50 rounded-lg p-4">
-            <div className="flex justify-between items-center mb-2">
-              <h4 className="font-bold">Level {board.level}</h4>
-            </div>
-
-            {board.data?.length === 0 ? (
-              <p className="text-gray-500 italic">No scores yet</p>
-            ) : (
-              <div className="space-y-2">
-                {board.data?.map((entry, index) => (
-                  <div
-                    key={entry.player + index}
-                    className={`flex justify-between items-center p-2 ${
-                      entry.player === address
-                        ? "bg-green-100/50"
-                        : "bg-white/30"
-                    } rounded`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold">{index + 1}.</span>
-                      <span className="font-mono">
-                        {resolvedNames[entry.player] ||
-                          `${entry.player.slice(0, 6)}...${entry.player.slice(
-                            -4
-                          )}`}
-                      </span>
-                    </div>
-                    <span className="font-bold">
-                      {Number(entry.score)} clicks
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+      <div className="space-y-6">{leaderboards.map(renderBoard)}</div>
     </div>
   );
 };

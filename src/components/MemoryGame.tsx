@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { usePenguinGameContract } from "@/lib/contract";
+import { usePenguinGameContract, type GameError } from "@/lib/contract";
 import Image from "next/image";
 import { useAccount } from "wagmi";
 import LeaderboardDisplay from "./LeaderboardDisplay";
@@ -10,7 +10,6 @@ import MiniLeaderboard from "./MiniLeaderboard";
 import CommentaryOverlay from "./CommentaryOverlay";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useImagePreloader } from "@/hooks/useImagePreloader";
-import { GameError } from "@/lib/contract";
 import { toast } from "react-hot-toast";
 
 interface Tile {
@@ -234,8 +233,12 @@ const MemoryGame: React.FC = () => {
   useGameInitialization(gameState, setGameState);
 
   // Update handleStartGame to not set state directly
-  const handleStartGame = useCallback(() => {
+  const handleStartGame = async () => {
     try {
+      // Start game with number (no need for BigInt)
+      const hash = await startGame(gameState.level);
+      console.log("Game started, hash:", hash);
+
       setGameState((prev) => ({
         ...prev,
         gameStarted: true,
@@ -243,10 +246,9 @@ const MemoryGame: React.FC = () => {
         selectedTiles: [],
       }));
     } catch (error) {
-      console.error("Failed to initialize game:", error);
-      alert("Failed to initialize game. Please try again.");
+      console.error("Failed to start game:", error);
     }
-  }, []);
+  };
 
   // Update level transition handlers
   const handleRetryLevel = useCallback(() => {
@@ -484,9 +486,9 @@ const MemoryGame: React.FC = () => {
     try {
       await startGame(gameState.level);
       await submitScore([
-        BigInt(gameState.level),
-        BigInt(gameState.clicks),
-        "0x" as const,
+        gameState.level, // uint8
+        gameState.clicks, // uint32
+        "0x", // empty proof
       ]);
 
       // Refresh leaderboard after successful submission
@@ -505,7 +507,7 @@ const MemoryGame: React.FC = () => {
           message: "Score submitted successfully!",
           showLeaderboard: true,
         },
-        leaderboardKey: Date.now(),
+        leaderboardKey: (prev.leaderboardKey || 0) + 1,
       }));
     } catch (err) {
       // First cast to unknown, then to GameError
@@ -859,147 +861,149 @@ const MemoryGame: React.FC = () => {
   // Show welcome screen only if game hasn't started
   if (!gameState.gameStarted) {
     return (
-      <div className="game-container">
-        <div className="game-info">
-          <h2 className="text-2xl font-bold mb-2">
-            {gameState.level === 1
-              ? "Welcome to Remenguiny"
-              : `Ready for Level ${gameState.level}?`}
-          </h2>
-          <p className="text-lg text-gray-600 mb-4">
-            {gameState.level === 1
-              ? "Start playing now! Connect your wallet to submit scores to the leaderboard."
-              : "Keep going! You're doing great!"}
-          </p>
-          <button
-            onClick={handleStartGame}
-            className="px-6 py-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors mb-4"
-          >
-            {gameState.level === 1 ? "Start Game" : "Continue Game"}
-          </button>
-          <LeaderboardDisplay refreshKey={gameState.leaderboardKey} />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="game-container">
-      <NetworkCheck />
-
-      {gameState.gameStarted && (
-        <>
-          <MiniLeaderboard level={gameState.level} />
-          <CommentaryOverlay
-            clicks={gameState.clicks}
-            level={gameState.level}
-            matches={matchCount}
-          />
-        </>
-      )}
-
-      <div className="game-info">
-        <h2 className="text-2xl font-bold mb-2">Level {gameState.level}</h2>
-        <div className="mb-2">Clicks: {gameState.clicks}</div>
-        <div className="mb-4 text-gray-600">
-          {gameState.level === 1
-            ? "Find matching pairs of penguins. Click two tiles to reveal them."
-            : gameState.level === 2
-            ? "Find triplets of matching penguins. Watch out for yetis!"
-            : "Final Challenge: Find all pairs while avoiding TWO yetis! Watch out - they'll reset your progress!"}
-        </div>
-        {!gameState.gameStarted && (
-          <>
+      <NetworkCheck>
+        <div className="game-container">
+          <div className="game-info">
+            <h2 className="text-2xl font-bold mb-2">
+              {gameState.level === 1
+                ? "Welcome to Remenguiny"
+                : `Ready for Level ${gameState.level}?`}
+            </h2>
+            <p className="text-lg text-gray-600 mb-4">
+              {gameState.level === 1
+                ? "Start playing now! Connect your wallet to submit scores to the leaderboard."
+                : "Keep going! You're doing great!"}
+            </p>
             <button
               onClick={handleStartGame}
               className="px-6 py-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors mb-4"
             >
-              Start Game
+              {gameState.level === 1 ? "Start Game" : "Continue Game"}
             </button>
             <LeaderboardDisplay refreshKey={gameState.leaderboardKey} />
-          </>
-        )}
-      </div>
-
-      {gameState.gameStarted && (
-        <div
-          className="game-grid"
-          style={{
-            gridTemplateColumns: `repeat(${
-              LEVEL_CONFIG[gameState.level as GameLevel].cols
-            }, 1fr)`,
-          }}
-        >
-          {gameState.tiles.map((tile: Tile) => (
-            <div
-              key={tile.id}
-              onClick={() => handleTileClick(tile.id)}
-              data-wrong-attempts={gameState.wrongAttempts[tile.id] || 0}
-              className={`game-tile 
-                ${tile.revealed || tile.matched ? "revealed" : ""} 
-                ${tile.matched ? "matched" : ""}
-                ${
-                  !tile.matched && gameState.wrongAttempts[tile.id] > 2
-                    ? "animate-wrong-match-severe"
-                    : ""
-                }
-                ${
-                  !tile.matched && gameState.wrongAttempts[tile.id] === 2
-                    ? "animate-wrong-match"
-                    : ""
-                }
-              `}
-            >
-              {(tile.revealed || tile.matched) && (
-                <Image
-                  src={`/images/penguin${tile.value}.png`}
-                  alt={`Penguin ${tile.value}`}
-                  width={150}
-                  height={150}
-                  className={`penguin-image ${tile.matched ? "matched" : ""}`}
-                  priority={true}
-                  loading="eager"
-                />
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {gameState.showYeti && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white p-8 rounded-lg text-center">
-            <Image
-              src="/images/penguin8.png"
-              alt="Yeti"
-              width={200}
-              height={200}
-              className="animate-bounce-custom mx-auto mb-4"
-              priority
-            />
-            <h3 className="text-3xl font-bold text-red-500 mb-4">
-              ROARRRRRR!!
-            </h3>
-            <button
-              onClick={() =>
-                setGameState((prev) => ({ ...prev, showYeti: false }))
-              }
-              className="px-6 py-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
-            >
-              Continue Playing
-            </button>
           </div>
         </div>
-      )}
+      </NetworkCheck>
+    );
+  }
 
-      {gameState.showCelebration && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          {handleCelebrationActions()}
+  return (
+    <NetworkCheck>
+      <div className="game-container">
+        {gameState.gameStarted && (
+          <>
+            <MiniLeaderboard level={gameState.level} />
+            <CommentaryOverlay
+              clicks={gameState.clicks}
+              level={gameState.level}
+              matches={matchCount}
+            />
+          </>
+        )}
+
+        <div className="game-info">
+          <h2 className="text-2xl font-bold mb-2">Level {gameState.level}</h2>
+          <div className="mb-2">Clicks: {gameState.clicks}</div>
+          <div className="mb-4 text-gray-600">
+            {gameState.level === 1
+              ? "Find matching pairs of penguins. Click two tiles to reveal them."
+              : gameState.level === 2
+              ? "Find triplets of matching penguins. Watch out for yetis!"
+              : "Final Challenge: Find all pairs while avoiding TWO yetis! Watch out - they'll reset your progress!"}
+          </div>
+          {!gameState.gameStarted && (
+            <>
+              <button
+                onClick={handleStartGame}
+                className="px-6 py-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors mb-4"
+              >
+                Start Game
+              </button>
+              <LeaderboardDisplay refreshKey={gameState.leaderboardKey} />
+            </>
+          )}
         </div>
-      )}
 
-      {renderHints()}
-    </div>
+        {gameState.gameStarted && (
+          <div
+            className="game-grid"
+            style={{
+              gridTemplateColumns: `repeat(${
+                LEVEL_CONFIG[gameState.level as GameLevel].cols
+              }, 1fr)`,
+            }}
+          >
+            {gameState.tiles.map((tile: Tile) => (
+              <div
+                key={tile.id}
+                onClick={() => handleTileClick(tile.id)}
+                data-wrong-attempts={gameState.wrongAttempts[tile.id] || 0}
+                className={`game-tile 
+                  ${tile.revealed || tile.matched ? "revealed" : ""} 
+                  ${tile.matched ? "matched" : ""}
+                  ${
+                    !tile.matched && gameState.wrongAttempts[tile.id] > 2
+                      ? "animate-wrong-match-severe"
+                      : ""
+                  }
+                  ${
+                    !tile.matched && gameState.wrongAttempts[tile.id] === 2
+                      ? "animate-wrong-match"
+                      : ""
+                  }
+                `}
+              >
+                {(tile.revealed || tile.matched) && (
+                  <Image
+                    src={`/images/penguin${tile.value}.png`}
+                    alt={`Penguin ${tile.value}`}
+                    width={150}
+                    height={150}
+                    className={`penguin-image ${tile.matched ? "matched" : ""}`}
+                    priority={true}
+                    loading="eager"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {gameState.showYeti && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white p-8 rounded-lg text-center">
+              <Image
+                src="/images/penguin8.png"
+                alt="Yeti"
+                width={200}
+                height={200}
+                className="animate-bounce-custom mx-auto mb-4"
+                priority
+              />
+              <h3 className="text-3xl font-bold text-red-500 mb-4">
+                ROARRRRRR!!
+              </h3>
+              <button
+                onClick={() =>
+                  setGameState((prev) => ({ ...prev, showYeti: false }))
+                }
+                className="px-6 py-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
+              >
+                Continue Playing
+              </button>
+            </div>
+          </div>
+        )}
+
+        {gameState.showCelebration && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            {handleCelebrationActions()}
+          </div>
+        )}
+
+        {renderHints()}
+      </div>
+    </NetworkCheck>
   );
 };
 

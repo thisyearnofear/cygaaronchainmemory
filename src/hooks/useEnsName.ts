@@ -1,12 +1,5 @@
 import { useState, useEffect } from "react";
-import { createPublicClient, http } from "viem";
-import { mainnet } from "viem/chains";
-
-// Create a mainnet client specifically for ENS resolution
-const ensClient = createPublicClient({
-  chain: mainnet,
-  transport: http(),
-});
+import { mainnetClient } from "@/app/providers";
 
 export function useEnsName(address: string) {
   const [ensName, setEnsName] = useState<string | null>(null);
@@ -14,9 +7,14 @@ export function useEnsName(address: string) {
 
   useEffect(() => {
     async function resolveEns() {
+      if (!address) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        // Use mainnet client for ENS resolution
-        const name = await ensClient.getEnsName({
+        // Always use mainnet client for ENS resolution
+        const name = await mainnetClient.getEnsName({
           address: address as `0x${string}`,
         });
         setEnsName(name);

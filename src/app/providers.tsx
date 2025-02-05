@@ -6,43 +6,12 @@ import {
 } from "@rainbow-me/rainbowkit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createConfig, http, WagmiProvider } from "wagmi";
-import { mainnet } from "wagmi/chains";
 import { createPublicClient } from "viem";
 import { abstractWallet } from "@abstract-foundation/agw-react/connectors";
 import "@rainbow-me/rainbowkit/styles.css";
 import { useState, useEffect } from "react";
-
-const abstractTestnet = {
-  id: 11124,
-  name: "Abstract Testnet",
-  network: "abstract-testnet",
-  nativeCurrency: {
-    decimals: 18,
-    name: "Ether",
-    symbol: "ETH",
-  },
-  rpcUrls: {
-    default: {
-      http: [
-        "https://api.testnet.abs.xyz",
-        "https://frequent-withered-surf.abstract-testnet.quiknode.pro/c980208c0896a2be88b9ea59315aa350d415d4f1",
-        "https://abstract-testnet.g.alchemy.com/v2/Tx9luktS3qyIwEKVtjnQrpq8t3MNEV-B",
-      ],
-    },
-  },
-  blockExplorers: {
-    default: {
-      name: "Abscan",
-      url: "https://sepolia.abscan.org",
-    },
-  },
-  contracts: {
-    multicall3: {
-      address: "0xcA11bde05977b3631167028862bE2a173976CA11" as `0x${string}`,
-      blockCreated: 1_234_567,
-    },
-  },
-} as const;
+import { abstractMainnet } from "@/lib/chains";
+import { mainnet } from "viem/chains";
 
 // Configure connectors for wallets
 const connectors = connectorsForWallets(
@@ -58,21 +27,29 @@ const connectors = connectorsForWallets(
   }
 );
 
-// Create wagmi config
+// Create wagmi config with both chains
 export const config = createConfig({
   connectors,
-  chains: [abstractTestnet, mainnet],
+  chains: [abstractMainnet, mainnet],
   transports: {
-    [abstractTestnet.id]: http(),
+    [abstractMainnet.id]: http(),
     [mainnet.id]: http(),
   },
 });
 
-// Create a proper public client using viem
-export const publicClient = createPublicClient({
-  chain: abstractTestnet,
-  transport: http(abstractTestnet.rpcUrls.default.http[0]),
+// Create public clients for both chains
+export const abstractClient = createPublicClient({
+  chain: abstractMainnet,
+  transport: http(abstractMainnet.rpcUrls.default.http[0]),
 });
+
+export const mainnetClient = createPublicClient({
+  chain: mainnet,
+  transport: http(),
+});
+
+// Export default client for game interactions
+export const publicClient = abstractClient;
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);

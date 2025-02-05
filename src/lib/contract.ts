@@ -6,14 +6,14 @@ import {
   createPublicClient,
   http,
 } from "viem";
-import { useState, useCallback } from "react";
-import { publicClient } from "@/app/providers";
-import { abstractTestnet } from "wagmi/chains";
+import { useState, useCallback, useEffect } from "react";
+import { abstractClient } from "@/app/providers";
+import { abstractMainnet } from "./chains";
 
 const PENGUIN_GAME_ABI = [
   {
     inputs: [
-      { internalType: "uint256", name: "level", type: "uint256" },
+      { internalType: "uint8", name: "level", type: "uint8" },
       { internalType: "bytes32", name: "levelHash", type: "bytes32" },
     ],
     name: "startGame",
@@ -23,8 +23,8 @@ const PENGUIN_GAME_ABI = [
   },
   {
     inputs: [
-      { internalType: "uint256", name: "level", type: "uint256" },
-      { internalType: "uint256", name: "clicks", type: "uint256" },
+      { internalType: "uint8", name: "level", type: "uint8" },
+      { internalType: "uint32", name: "clicks", type: "uint32" },
       { internalType: "bytes", name: "proof", type: "bytes" },
     ],
     name: "submitScore",
@@ -33,15 +33,15 @@ const PENGUIN_GAME_ABI = [
     type: "function",
   },
   {
-    inputs: [{ internalType: "uint256", name: "level", type: "uint256" }],
+    inputs: [{ internalType: "uint8", name: "level", type: "uint8" }],
     name: "getLeaderboard",
     outputs: [
       {
         components: [
           { internalType: "address", name: "player", type: "address" },
-          { internalType: "uint256", name: "score", type: "uint256" },
+          { internalType: "uint32", name: "score", type: "uint32" },
         ],
-        internalType: "struct PenguinGame.LeaderboardEntry[]",
+        internalType: "struct PenguinGameMainnet.LeaderboardEntry[]",
         name: "",
         type: "tuple[]",
       },
@@ -51,31 +51,18 @@ const PENGUIN_GAME_ABI = [
   },
 ] as const;
 
-const CONTRACT_ADDRESS = "0xFae263fE7ae81169119aC43e6523d51eaBC9b6D2" as const;
+const CONTRACT_ADDRESS = "0xB945d267eab7EfAe0b41253F50D690DBe712702C" as const;
 
-// Update WagmiTransaction type to match zkSync receipt format
-type WagmiTransaction = {
-  hash: `0x${string}`;
-  wait: () => Promise<TransactionReceipt>;
-};
-
+// UI types (what we use in components)
 export type LeaderboardEntry = {
   player: `0x${string}`;
-  score: bigint;
+  score: number; // uint32 in contract
 };
 
 export type LeaderboardData = {
   level: number;
-  data: readonly LeaderboardEntry[];
+  data: LeaderboardEntry[];
 };
-
-// Add a more specific error type
-type ContractError = {
-  message?: string;
-  code?: string | number;
-  details?: string;
-  data?: unknown;
-} & Error;
 
 // Add a custom error type for user-friendly messages
 export type GameError = {
@@ -92,17 +79,17 @@ export function usePenguinGameContract() {
     if (!chainId) return;
 
     try {
-      console.log("Refreshing all leaderboards...");
       const newLeaderboards: LeaderboardData[] = [];
 
       for (let level = 1; level <= 3; level++) {
         try {
-          const data = (await publicClient.readContract({
+          // Contract returns uint32 scores, so we can use number directly
+          const data = (await abstractClient.readContract({
             address: CONTRACT_ADDRESS,
             abi: PENGUIN_GAME_ABI,
             functionName: "getLeaderboard",
-            args: [BigInt(level)],
-          })) as readonly LeaderboardEntry[];
+            args: [level],
+          })) as LeaderboardEntry[];
 
           newLeaderboards.push({ level, data });
         } catch (error) {
@@ -117,54 +104,46 @@ export function usePenguinGameContract() {
     }
   }, [chainId]);
 
-  const startGame = async (level: number) => {
-    try {
-      // Generate a random level hash using viem's utilities
-      const levelHash = keccak256(
-        stringToHex(
-          JSON.stringify({
-            level,
-            timestamp: Date.now(),
-            random: Math.random(),
-          })
-        )
-      );
+  const startGame = async (level: number): Promise<`0x${string}`> => {
+    const levelHash = keccak256(
+      stringToHex(
+        JSON.stringify({
+          level,
+          timestamp: Date.now(),
+          random: Math.random(),
+        })
+      )
+    );
 
-      console.log("Starting game session...", { level, levelHash });
+    const hash = await writeContractAsync({
+      address: CONTRACT_ADDRESS,
+      abi: PENGUIN_GAME_ABI,
+      functionName: "startGame",
+      args: [level, levelHash],
+    });
 
-      const hash = await writeContractAsync({
-        address: CONTRACT_ADDRESS,
-        abi: PENGUIN_GAME_ABI,
-        functionName: "startGame",
-        args: [BigInt(level), levelHash],
-      });
-
-      // Wait for transaction to be mined
-      await publicClient.waitForTransactionReceipt({ hash });
-
-      return hash;
-    } catch (error) {
-      console.error("Failed to start game:", error);
-      throw error;
-    }
+    return hash;
   };
 
   const submitScore = async (
-    args: [bigint, bigint, `0x${string}`]
-  ): Promise<WagmiTransaction> => {
+    args: [number, number, `0x${string}`] // [level, clicks, proof]
+  ): Promise<{
+    hash: `0x${string}`;
+    wait: () => Promise<TransactionReceipt>;
+  }> => {
     try {
       const hash = await writeContractAsync({
         address: CONTRACT_ADDRESS,
         abi: PENGUIN_GAME_ABI,
         functionName: "submitScore",
-        args,
+        args, // Contract expects uint8, uint32, bytes
         gas: BigInt(300000),
       });
 
       return {
         hash,
         wait: async () => {
-          const rpcUrls = abstractTestnet.rpcUrls.default.http;
+          const rpcUrls = abstractMainnet.rpcUrls.default.http;
           let receipt = null;
           let lastError: Error | null = null;
 
@@ -172,7 +151,7 @@ export function usePenguinGameContract() {
             for (const rpc of rpcUrls) {
               try {
                 const client = createPublicClient({
-                  chain: abstractTestnet,
+                  chain: abstractMainnet,
                   transport: http(rpc),
                 });
 
@@ -204,85 +183,51 @@ export function usePenguinGameContract() {
             throw new Error("Failed to get transaction receipt from all RPCs");
           }
 
-          // Ensure all required fields are present with correct types
-          const standardReceipt: TransactionReceipt = {
-            ...receipt,
-            blockHash:
-              receipt.blockHash ||
-              "0x0000000000000000000000000000000000000000000000000000000000000000",
-            blockNumber: receipt.blockNumber || BigInt(0),
-            contractAddress: receipt.contractAddress || null,
-            from: receipt.from,
-            status: receipt.status,
-            to: receipt.to || null,
-            transactionHash: receipt.transactionHash,
-            transactionIndex: receipt.transactionIndex || 0,
-            logs: receipt.logs.map((log) => ({
-              ...log,
-              blockHash: log.blockHash || receipt.blockHash,
-              blockNumber: log.blockNumber || receipt.blockNumber || BigInt(0),
-              logIndex: log.logIndex || 0,
-              removed: false,
-              transactionHash: log.transactionHash || receipt.transactionHash,
-              transactionIndex:
-                log.transactionIndex || receipt.transactionIndex || 0,
-            })),
-          };
+          // Check events in the receipt
+          console.log("Transaction receipt:", receipt);
+          console.log("Events emitted:", receipt.logs);
 
-          // Handle different status formats more safely
-          const statusString = String(standardReceipt.status).toLowerCase();
-          const numericStatus = Number(standardReceipt.status);
-          const isSuccess =
-            statusString === "success" ||
-            statusString === "1" ||
-            statusString === "0x1" ||
-            numericStatus === 1;
-
-          if (isSuccess) {
-            await refreshLeaderboard();
-          } else {
-            console.error(
-              "Transaction failed with status:",
-              standardReceipt.status
-            );
-          }
-
-          return standardReceipt;
+          return receipt;
         },
       };
     } catch (err) {
-      const error = err as unknown as ContractError;
+      const error = err as Error;
 
-      // Handle user rejection with a cleaner error
       if (typeof error.message === "string") {
         if (
           error.message.toLowerCase().includes("user denied") ||
           error.message.toLowerCase().includes("user rejected")
         ) {
-          const gameError: GameError = {
+          throw {
             type: "user_rejected",
             message: "Transaction cancelled",
-          };
-          throw gameError;
+          } as GameError;
         }
         if (error.message.includes("insufficient funds")) {
-          const gameError: GameError = {
-            type: "network",
-            message: "Insufficient funds",
-          };
-          throw gameError;
+          throw { type: "network", message: "Insufficient funds" } as GameError;
         }
       }
 
-      // Handle other errors
       console.error("Score submission error:", error);
-      const gameError: GameError = {
-        type: "unknown",
-        message: "Failed to submit score",
-      };
-      throw gameError;
+      throw { type: "unknown", message: "Failed to submit score" } as GameError;
     }
   };
+
+  useEffect(() => {
+    const unwatch = abstractClient.watchContractEvent({
+      address: CONTRACT_ADDRESS,
+      abi: PENGUIN_GAME_ABI,
+      eventName: "ScoreSubmitted",
+      onLogs: (logs) => {
+        console.log("New score submitted:", logs);
+        refreshLeaderboard();
+      },
+    });
+
+    return () => {
+      unwatch();
+    };
+  }, [refreshLeaderboard]);
 
   return {
     leaderboards,
