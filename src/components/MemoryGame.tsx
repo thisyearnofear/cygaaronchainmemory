@@ -709,151 +709,153 @@ const MemoryGame: React.FC = () => {
     );
 
     return (
-      <div className="max-w-md w-full mx-auto">
-        <div className="bg-white p-8 rounded-xl shadow-lg">
-          {/* Header */}
-          <div className="flex flex-col items-center mb-6">
-            <Image
-              src="/images/penguin9.png"
-              alt="Cygaar"
-              width={150}
-              height={150}
-              className="animate-bounce-gentle mb-4"
-              priority
-            />
-            <h2 className="text-2xl font-bold">
-              Level {gameState.level} Complete!
-            </h2>
-            <p className="text-lg mt-2">
-              Great job! You completed it in {gameState.clicks} clicks!
-            </p>
-          </div>
+      <div className="bg-white rounded-xl p-8 max-w-md w-full mx-4 relative">
+        {/* Add close button */}
+        <button
+          onClick={gameState.level < 3 ? handleNextLevel : handleRetryLevel}
+          className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+          aria-label="Close"
+        >
+          ✕
+        </button>
 
-          {/* Action Buttons */}
-          {!completionState.showingOptions ? (
-            <div className="space-y-3">
-              {isConnected ? (
-                <button
-                  onClick={() =>
-                    setCompletionState((prev) => ({
-                      ...prev,
-                      showingOptions: true,
-                    }))
-                  }
-                  className="w-full bg-emerald-500 text-white py-3 px-4 rounded-lg hover:bg-emerald-600 transition-colors"
-                >
-                  Submit Score to Leaderboard
-                </button>
-              ) : (
-                <div className="space-y-4">
-                  <div className="bg-emerald-50 p-4 rounded-lg text-sm">
-                    <p className="mb-3">
-                      Connect your wallet to submit your score to the
-                      leaderboard!
-                    </p>
-                    <div className="flex justify-center">
-                      <ConnectButton />
-                    </div>
+        {/* Celebration content */}
+        <div className="text-center mb-6">
+          <Image
+            src="/images/penguin0.png"
+            alt="Celebration Penguin"
+            width={100}
+            height={100}
+            className="mx-auto mb-4"
+            priority
+          />
+          <h2 className="text-2xl font-bold">
+            Level {gameState.level} Complete!
+          </h2>
+          <p className="text-lg mt-2">
+            Great job! You completed it in {gameState.clicks} clicks!
+          </p>
+        </div>
+
+        {/* Action Buttons */}
+        {!completionState.showingOptions ? (
+          <div className="space-y-3">
+            {isConnected ? (
+              <button
+                onClick={() =>
+                  setCompletionState((prev) => ({
+                    ...prev,
+                    showingOptions: true,
+                  }))
+                }
+                className="w-full bg-emerald-500 text-white py-3 px-4 rounded-lg hover:bg-emerald-600 transition-colors"
+              >
+                Submit Score to Leaderboard
+              </button>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-emerald-50 p-4 rounded-lg text-sm">
+                  <p className="mb-3">
+                    Connect your wallet to submit your score to the leaderboard!
+                  </p>
+                  <div className="flex justify-center">
+                    <ConnectButton />
                   </div>
                 </div>
+              </div>
+            )}
+            <button
+              onClick={gameState.level < 3 ? handleNextLevel : handleRetryLevel}
+              className="w-full bg-green-500 text-white py-3 px-4 rounded-lg hover:bg-green-600 transition-colors"
+            >
+              {gameState.level < 3 ? "Continue to Next Level" : "Play Again"}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Score Submission Info */}
+            <div className="bg-emerald-50 p-4 rounded-lg">
+              <h3 className="font-bold mb-2">Submitting Your Score</h3>
+              <ol className="list-decimal list-inside space-y-2 text-sm">
+                <li>First transaction: Activate game session</li>
+                <li>Second transaction: Submit your score</li>
+                <li>Leaderboard updates within ~1 minute</li>
+              </ol>
+              {gameState.submissionStatus && (
+                <p className="mt-3 text-sm text-gray-600">
+                  {gameState.submissionStatus.message}
+                </p>
+              )}
+            </div>
+
+            {/* Submission Status */}
+            {gameState.submissionStatus && (
+              <div
+                className={`p-4 rounded-lg ${
+                  gameState.submissionStatus.success
+                    ? "bg-green-50"
+                    : "bg-red-50"
+                }`}
+              >
+                <p
+                  className={
+                    gameState.submissionStatus.success
+                      ? "text-green-700"
+                      : "text-red-700"
+                  }
+                >
+                  {gameState.submissionStatus.message}
+                </p>
+              </div>
+            )}
+
+            {/* Submit/Continue Buttons */}
+            <div className="space-y-3">
+              {!gameState.submissionStatus?.success && (
+                <button
+                  onClick={handleSubmitScore}
+                  disabled={completionState.isSubmitting}
+                  className="w-full bg-emerald-500 text-white py-3 px-4 rounded-lg hover:bg-emerald-600 transition-colors disabled:bg-emerald-300"
+                >
+                  {completionState.isSubmitting
+                    ? "Processing..."
+                    : "Submit Score"}
+                </button>
               )}
               <button
                 onClick={
                   gameState.level < 3 ? handleNextLevel : handleRetryLevel
                 }
-                className="w-full bg-green-500 text-white py-3 px-4 rounded-lg hover:bg-green-600 transition-colors"
+                className="w-full bg-gray-200 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors"
               >
-                {gameState.level < 3 ? "Continue to Next Level" : "Play Again"}
+                {/* Change "Back" to "Continue" */}
+                {gameState.submissionStatus?.success ? "Continue" : "Cancel"}
               </button>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Score Submission Info */}
-              <div className="bg-emerald-50 p-4 rounded-lg">
-                <h3 className="font-bold mb-2">Submitting Your Score</h3>
-                <ol className="list-decimal list-inside space-y-2 text-sm">
-                  <li>First transaction: Activate game session</li>
-                  <li>Second transaction: Submit your score</li>
-                  <li>Leaderboard updates within ~1 minute</li>
-                </ol>
-                {gameState.submissionStatus && (
-                  <p className="mt-3 text-sm text-gray-600">
-                    {gameState.submissionStatus.message}
-                  </p>
-                )}
-              </div>
-
-              {/* Submission Status */}
-              {gameState.submissionStatus && (
-                <div
-                  className={`p-4 rounded-lg ${
-                    gameState.submissionStatus.success
-                      ? "bg-green-50"
-                      : "bg-red-50"
-                  }`}
-                >
-                  <p
-                    className={
-                      gameState.submissionStatus.success
-                        ? "text-green-700"
-                        : "text-red-700"
-                    }
-                  >
-                    {gameState.submissionStatus.message}
-                  </p>
-                </div>
-              )}
-
-              {/* Submit/Back Buttons */}
-              <div className="space-y-3">
-                {!gameState.submissionStatus?.success && (
-                  <button
-                    onClick={handleSubmitScore}
-                    disabled={completionState.isSubmitting}
-                    className="w-full bg-emerald-500 text-white py-3 px-4 rounded-lg hover:bg-emerald-600 transition-colors disabled:bg-emerald-300"
-                  >
-                    {completionState.isSubmitting
-                      ? "Processing..."
-                      : "Submit Score"}
-                  </button>
-                )}
-                <button
-                  onClick={() =>
-                    setCompletionState((prev) => ({
-                      ...prev,
-                      showingOptions: false,
-                    }))
-                  }
-                  className="w-full bg-gray-200 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors"
-                >
-                  Back
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="mt-4 text-center">
-            <a
-              href={`https://twitter.com/intent/tweet?text=${tweetText}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block w-full px-6 py-3 bg-blue-400 text-white rounded-lg hover:bg-blue-500 transition-colors mt-4"
-            >
-              Share on Twitter
-            </a>
           </div>
+        )}
 
-          {gameState.level === 3 && (
-            <div className="mt-6 text-center animate-fade-in">
-              <h3 className="text-xl font-bold text-emerald-600 mb-2">
-                🎉 Congratulations! You&apos;ve Completed Remenguiny!
-              </h3>
-              <p className="text-gray-600">
-                You&apos;ve mastered all levels of Remenguiny!
-              </p>
-            </div>
-          )}
+        <div className="mt-4 text-center">
+          <a
+            href={`https://twitter.com/intent/tweet?text=${tweetText}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block w-full px-6 py-3 bg-blue-400 text-white rounded-lg hover:bg-blue-500 transition-colors mt-4"
+          >
+            Share on Twitter
+          </a>
         </div>
+
+        {gameState.level === 3 && (
+          <div className="mt-6 text-center animate-fade-in">
+            <h3 className="text-xl font-bold text-emerald-600 mb-2">
+              🎉 Congratulations! You&apos;ve Completed Remenguiny!
+            </h3>
+            <p className="text-gray-600">
+              You&apos;ve mastered all levels of Remenguiny!
+            </p>
+          </div>
+        )}
       </div>
     );
   };

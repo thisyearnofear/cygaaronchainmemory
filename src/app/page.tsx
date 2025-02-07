@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import ClientOnly from "@/components/ClientOnly";
 import { Suspense } from "react";
+import PromotionalBanner from "@/components/PromotionalBanner";
+import SideDecorations from "../components/SideDecorations";
 
 // Dynamically import components with ssr disabled
 const MemoryGame = dynamic(() => import("@/components/MemoryGame"), {
@@ -29,9 +31,11 @@ export default function HomePage() {
   return (
     <ClientOnly>
       <Suspense fallback={<div>Loading...</div>}>
-        <div className="container mx-auto px-4">
+        <PromotionalBanner />
+        <div className="container mx-auto px-4 pt-20">
           <div className="flex flex-col items-center gap-8">
             <ConnectButton />
+            <SideDecorations />
             <MemoryGame />
             <div className="music-player-container">
               <MusicPlayer />

@@ -146,6 +146,28 @@ const LEVEL3_PROGRESS_COMMENTS = [
   "The leaderboard awaits! 🏆",
 ] as const;
 
+// Add to your existing comments array
+const PROMOTIONAL_COMMENTS = [
+  {
+    image: "/images/penguin10.png",
+    name: "Luca",
+    comment: "Did you hear? Top 3 players win CryptoTester NFTs! 🏆",
+    priority: true,
+  },
+  {
+    image: "/images/penguin9.png",
+    name: "Cygaar",
+    comment: "imagine not tweeting for free $CYGAAR... ngmi 💀",
+    priority: true,
+  },
+  {
+    image: "/images/penguin10.png",
+    name: "Luca",
+    comment: "Tweet your score for a chance at the $CYGAAR airdrop! 🎉",
+    priority: true,
+  },
+] as const;
+
 // Helper functions outside component
 const getRandomComment = (comments: readonly string[]) =>
   comments[Math.floor(Math.random() * comments.length)];
@@ -266,6 +288,13 @@ const CommentaryOverlay: React.FC<CommentaryOverlayProps> = memo(
             priority: true,
           };
         }
+      }
+
+      // Add to your getComment function
+      if (clicks === 1 || clicks === 20 || clicks === 40) {
+        return PROMOTIONAL_COMMENTS[
+          Math.floor(Math.random() * PROMOTIONAL_COMMENTS.length)
+        ];
       }
 
       return null;
