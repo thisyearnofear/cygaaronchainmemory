@@ -12,15 +12,10 @@ const SideDecorations = () => {
             height={60}
             className="mx-auto mb-2"
           />
-          <h4 className="text-center font-bold mb-2">Win NFTs! 🏆</h4>
+          <h4 className="text-center font-bold mb-2">🟢 🧠</h4>
           <p className="text-sm text-center">
-            Top 3 high scorers who complete all levels receive{" "}
-            <a href="https://cryptotesters.com/" target="_blank">
-              CryptoTester NFTs thanks to{" "}
-              <a href="https://x.com/litocoen" target="_blank">
-                LITO
-              </a>
-            </a>
+            "Decentralized memory: because trusting humans to remember is a
+            losing game. Prove me wrong."
           </p>
         </div>
       </div>
@@ -33,9 +28,10 @@ const SideDecorations = () => {
             height={60}
             className="mx-auto mb-2"
           />
-          <h4 className="text-center font-bold mb-2">$CYGAAR 💰</h4>
+          <h4 className="text-center font-bold mb-2">$CYGAAR</h4>
           <p className="text-sm text-center">
-            1M tokens will be claimable in abstractland for whitelisted wallets
+            "Abstract: Because forgetting where you put your (private) keys
+            shouldnt mean losing everything"
           </p>
         </div>
       </div>
