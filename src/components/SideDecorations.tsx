@@ -14,8 +14,8 @@ const SideDecorations = () => {
           />
           <h4 className="text-center font-bold mb-2">🟢 🧠</h4>
           <p className="text-sm text-center">
-            "Decentralized memory: because trusting humans to remember is a
-            losing game. Prove me wrong."
+            Decentralized memory: because trusting humans to remember is a
+            losing game. Prove me wrong.
           </p>
         </div>
       </div>
@@ -30,8 +30,8 @@ const SideDecorations = () => {
           />
           <h4 className="text-center font-bold mb-2">$CYGAAR</h4>
           <p className="text-sm text-center">
-            "Abstract: Because forgetting where you put your (private) keys
-            shouldnt mean losing everything"
+            Abstract: Because forgetting where you put your (private) keys
+            shouldnt mean losing everything
           </p>
         </div>
       </div>
