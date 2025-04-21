@@ -25,26 +25,13 @@ const PromotionalBanner = () => {
       <div className="container mx-auto max-w-4xl">
         <div className="flex items-center justify-between">
           <div className="flex-1">
-            <h3 className="text-lg font-bold mb-1">🎯 Snapshot Complete!</h3>
+            <h3 className="text-lg font-bold mb-1">
+              🎮 $CYGAAR Token Distribution
+            </h3>
             <p className="text-sm">
-              Claimables coming soon to{" "}
-              <a
-                href="https://abstractland-cygaar.vercel.app/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-white/90"
-              >
-                abstractland
-              </a>{" "}
-              &{" "}
-              <a
-                href="https://cygaarland.netlify.app/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-white/90"
-              >
-                cygaarland
-              </a>
+              <span className="bg-white/20 px-2 py-1 rounded-md">NEW!</span>{" "}
+              Claim your $CYGAAR tokens directly on this site based on your
+              gameplay achievements!
             </p>
           </div>
           <div className="flex-1 text-right">
@@ -57,6 +44,15 @@ const PromotionalBanner = () => {
               📱 Join Telegram for Updates
             </a>
           </div>
+        </div>
+        <div className="mt-2 text-xs">
+          <p className="font-semibold">How to earn $CYGAAR:</p>
+          <ul className="grid grid-cols-2 gap-x-4 gap-y-1 mt-1">
+            <li>• Complete game levels</li>
+            <li>• Get top leaderboard positions</li>
+            <li>• Achieve perfect scores</li>
+            <li>• Complete all levels</li>
+          </ul>
         </div>
       </div>
     </div>
