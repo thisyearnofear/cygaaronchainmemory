@@ -7,7 +7,7 @@ import {
   http,
 } from "viem";
 import { useState, useCallback, useEffect } from "react";
-import { abstractClient } from "@/app/providers";
+import { abstractMainnetClient } from "@/app/providers";
 import { abstractMainnet } from "./chains";
 
 const PENGUIN_GAME_ABI = [
@@ -84,7 +84,7 @@ export function usePenguinGameContract() {
       for (let level = 1; level <= 3; level++) {
         try {
           // Contract returns uint32 scores, so we can use number directly
-          const data = (await abstractClient.readContract({
+          const data = (await abstractMainnetClient.readContract({
             address: CONTRACT_ADDRESS,
             abi: PENGUIN_GAME_ABI,
             functionName: "getLeaderboard",
@@ -214,7 +214,7 @@ export function usePenguinGameContract() {
   };
 
   useEffect(() => {
-    const unwatch = abstractClient.watchContractEvent({
+    const unwatch = abstractMainnetClient.watchContractEvent({
       address: CONTRACT_ADDRESS,
       abi: PENGUIN_GAME_ABI,
       eventName: "ScoreSubmitted",

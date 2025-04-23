@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { mainnetClient } from "@/app/providers";
+import { ethereumClient } from "@/app/providers";
 
 export function useEnsName(address: string) {
   const [ensName, setEnsName] = useState<string | null>(null);
@@ -13,8 +13,8 @@ export function useEnsName(address: string) {
       }
 
       try {
-        // Always use mainnet client for ENS resolution
-        const name = await mainnetClient.getEnsName({
+        // Always use Ethereum mainnet client for ENS resolution
+        const name = await ethereumClient.getEnsName({
           address: address as `0x${string}`,
         });
         setEnsName(name);

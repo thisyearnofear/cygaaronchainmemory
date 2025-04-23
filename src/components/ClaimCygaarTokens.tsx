@@ -3,7 +3,7 @@ import { useAccount, useWriteContract, useReadContract } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { formatEther } from "viem";
 import { toast } from "react-hot-toast";
-import { abstractClient } from "@/app/providers";
+import { abstractTestnetClient } from "@/app/providers";
 import {
   CYGAAR_ADDRESSES,
   TOKEN_REWARDS,
@@ -182,7 +182,7 @@ export default function ClaimCygaarTokens() {
 
       // Wait for transaction to complete
       try {
-        const receipt = await abstractClient.waitForTransactionReceipt({
+        const receipt = await abstractTestnetClient.waitForTransactionReceipt({
           hash,
           timeout: 30_000,
         });
