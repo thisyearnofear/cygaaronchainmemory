@@ -1,5 +1,3 @@
-import { ethers } from "ethers";
-
 export const CygaarDistributor = {
   abi: [
     "function initialize(address,address)",

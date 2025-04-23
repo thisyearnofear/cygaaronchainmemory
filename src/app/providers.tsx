@@ -10,8 +10,11 @@ import { createPublicClient } from "viem";
 import { abstractWallet } from "@abstract-foundation/agw-react/connectors";
 import "@rainbow-me/rainbowkit/styles.css";
 import { useState, useEffect } from "react";
-import { abstractMainnet } from "@/lib/chains";
-import { mainnet } from "viem/chains";
+import {
+  abstractMainnet,
+  abstractTestnet,
+  ethereumMainnet,
+} from "@/lib/chains";
 
 // Configure connectors for wallets
 const connectors = connectorsForWallets(
@@ -27,29 +30,39 @@ const connectors = connectorsForWallets(
   }
 );
 
-// Create wagmi config with both chains
+// Create wagmi config with all chains
 export const config = createConfig({
   connectors,
-  chains: [abstractMainnet, mainnet],
+  chains: [abstractMainnet, abstractTestnet, ethereumMainnet],
   transports: {
     [abstractMainnet.id]: http(),
-    [mainnet.id]: http(),
+    [abstractTestnet.id]: http(),
+    [ethereumMainnet.id]: http(),
   },
 });
 
-// Create public clients for both chains
-export const abstractClient = createPublicClient({
+// Create public clients for all chains
+export const abstractMainnetClient = createPublicClient({
   chain: abstractMainnet,
   transport: http(abstractMainnet.rpcUrls.default.http[0]),
 });
 
-export const mainnetClient = createPublicClient({
-  chain: mainnet,
-  transport: http(),
+export const abstractTestnetClient = createPublicClient({
+  chain: abstractTestnet,
+  transport: http(abstractTestnet.rpcUrls.default.http[0]),
 });
 
-// Export default client for game interactions
-export const publicClient = abstractClient;
+export const ethereumClient = createPublicClient({
+  chain: ethereumMainnet,
+  transport: http(ethereumMainnet.rpcUrls.default.http[0]),
+});
+
+// Export default client for game interactions (Abstract Mainnet)
+export const publicClient = abstractMainnetClient;
+
+// Add missing exports for compatibility
+export const abstractClient = abstractTestnetClient;
+export const mainnetClient = ethereumClient;
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);

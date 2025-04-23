@@ -1,10 +1,5 @@
 import React, { useState, useEffect } from "react";
-import {
-  useAccount,
-  useWriteContract,
-  useReadContract,
-  useChainId,
-} from "wagmi";
+import { useAccount, useWriteContract, useReadContract } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { formatEther } from "viem";
 import { toast } from "react-hot-toast";
@@ -89,7 +84,6 @@ const CYGAAR_TOKEN_ABI = [
 
 export default function ClaimCygaarTokens() {
   const { address } = useAccount();
-  const chainId = useChainId();
   const [claimableAmount, setClaimableAmount] = useState<bigint | null>(null);
   const [hasClaimed, setHasClaimed] = useState<boolean | null>(null);
   const [tokenBalance, setTokenBalance] = useState<bigint | null>(null);
@@ -102,14 +96,14 @@ export default function ClaimCygaarTokens() {
 
   // Check if distribution is active
   const { data: distributionActive } = useReadContract({
-    address: CYGAAR_ADDRESSES.DISTRIBUTOR_ADDRESS,
+    address: CYGAAR_ADDRESSES.DISTRIBUTOR_ADDRESS as `0x${string}`,
     abi: CYGAAR_DISTRIBUTOR_ABI,
     functionName: "distributionActive",
   });
 
   // Get total distributed so far
   const { data: totalDistributedData } = useReadContract({
-    address: CYGAAR_ADDRESSES.DISTRIBUTOR_ADDRESS,
+    address: CYGAAR_ADDRESSES.DISTRIBUTOR_ADDRESS as `0x${string}`,
     abi: CYGAAR_DISTRIBUTOR_ABI,
     functionName: "totalDistributed",
   });
@@ -117,7 +111,7 @@ export default function ClaimCygaarTokens() {
   // Get user's claimable amount
   const { data: claimableAmountData, refetch: refetchClaimable } =
     useReadContract({
-      address: CYGAAR_ADDRESSES.DISTRIBUTOR_ADDRESS,
+      address: CYGAAR_ADDRESSES.DISTRIBUTOR_ADDRESS as `0x${string}`,
       abi: CYGAAR_DISTRIBUTOR_ABI,
       functionName: "calculateRewards",
       args: address ? [address] : undefined,
@@ -125,7 +119,7 @@ export default function ClaimCygaarTokens() {
 
   // Check if user has already claimed
   const { data: hasClaimedData, refetch: refetchClaimed } = useReadContract({
-    address: CYGAAR_ADDRESSES.DISTRIBUTOR_ADDRESS,
+    address: CYGAAR_ADDRESSES.DISTRIBUTOR_ADDRESS as `0x${string}`,
     abi: CYGAAR_DISTRIBUTOR_ABI,
     functionName: "hasClaimed",
     args: address ? [address] : undefined,
@@ -133,7 +127,7 @@ export default function ClaimCygaarTokens() {
 
   // Get user's token balance
   const { data: tokenBalanceData, refetch: refetchBalance } = useReadContract({
-    address: CYGAAR_ADDRESSES.TOKEN_ADDRESS,
+    address: CYGAAR_ADDRESSES.TOKEN_ADDRESS as `0x${string}`,
     abi: CYGAAR_TOKEN_ABI,
     functionName: "balanceOf",
     args: address ? [address] : undefined,
@@ -177,7 +171,7 @@ export default function ClaimCygaarTokens() {
     setIsLoading(true);
     try {
       const hash = await writeContractAsync({
-        address: CYGAAR_ADDRESSES.DISTRIBUTOR_ADDRESS,
+        address: CYGAAR_ADDRESSES.DISTRIBUTOR_ADDRESS as `0x${string}`,
         abi: CYGAAR_DISTRIBUTOR_ABI,
         functionName: "claimRewards",
       });
@@ -207,9 +201,9 @@ export default function ClaimCygaarTokens() {
         console.error("Transaction receipt error:", error);
         toast.error("Failed to confirm transaction. Please check your wallet.");
       }
-    } catch (error: any) {
-      console.error("Claim error:", error);
-      toast.error(error?.message || "Failed to claim. Please try again.");
+    } catch (err: unknown) {
+      toast.error((err as Error)?.message || "Failed to claim tokens");
+      console.error("Error claiming tokens:", err);
     } finally {
       setIsLoading(false);
     }
@@ -357,9 +351,9 @@ export default function ClaimCygaarTokens() {
                     No Tokens Available
                   </h4>
                   <p className="text-sm mt-1 text-yellow-700">
-                    You don't have any $CYGAAR tokens to claim. Only players who
-                    participated in the game before the distribution deadline
-                    are eligible.
+                    You don&apos;t have any $CYGAAR tokens to claim. Only
+                    players who participated in the game before the distribution
+                    deadline are eligible.
                   </p>
                 </div>
               )}

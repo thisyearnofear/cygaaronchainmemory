@@ -1,5 +1,3 @@
-import { ethers } from "ethers";
-
 export const CygaarTestToken = {
   abi: [
     "function totalSupply() view returns(uint256)",

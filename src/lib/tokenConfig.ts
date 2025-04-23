@@ -1,12 +1,14 @@
 // CYGAAR Token Configuration
 // Abstract Testnet Configuration
 
-export const CYGAAR_ADDRESSES = {
-  // The existing CYGAAR token contract address
-  TOKEN_ADDRESS: "0x35EfA4699EdD7b468CBBf4FfF7B6e7AFC0A7aDa6",
+import { abstractTestnet } from "./chains";
 
-  // The CYGAAR distributor contract address (will be set after deployment)
-  DISTRIBUTOR_ADDRESS: "0xYourDistributorAddressHere",
+export const CYGAAR_ADDRESSES = {
+  // The test CYGAAR token contract address
+  TOKEN_ADDRESS: "0x8a24191DED3dF3E06a5F05E93FEFF79452a52f86",
+
+  // The CYGAAR distributor contract address
+  DISTRIBUTOR_ADDRESS: "0x6E2b55aA7aCdD234C39CE8470D7656Da738e3AFe",
 
   // The existing Penguin Game contract address
   PENGUIN_GAME_ADDRESS: "0xB945d267eab7EfAe0b41253F50D690DBe712702C",
@@ -31,10 +33,10 @@ export const TOKEN_REWARDS = {
 export const TOTAL_DISTRIBUTION = 1_000_000;
 
 // Abstract Testnet Explorer URL
-export const EXPLORER_URL = "https://sepolia.abscan.org/tx/";
+export const EXPLORER_URL = abstractTestnet.blockExplorers.default.url + "/tx/";
 
 // Abstract Testnet RPC URL
-export const RPC_URL = "https://api.testnet.abs.xyz";
+export const RPC_URL = abstractTestnet.rpcUrls.default.http[0];
 
 // Abstract Testnet Chain ID
-export const CHAIN_ID = 11124;
+export const CHAIN_ID = abstractTestnet.id;

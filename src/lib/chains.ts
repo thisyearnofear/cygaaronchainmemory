@@ -1,5 +1,6 @@
 import type { Chain } from "viem";
 
+// Abstract Mainnet
 export const abstractMainnet = {
   id: 2741,
   name: "Abstract",
@@ -30,3 +31,73 @@ export const abstractMainnet = {
     },
   },
 } as const satisfies Chain;
+
+// Abstract Testnet
+export const abstractTestnet = {
+  id: 11124,
+  name: "Abstract Testnet",
+  nativeCurrency: {
+    decimals: 18,
+    name: "Ether",
+    symbol: "ETH",
+  },
+  rpcUrls: {
+    default: {
+      http: ["https://api.testnet.abs.xyz"],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: "Abscan Testnet",
+      url: "https://sepolia.abscan.org",
+    },
+  },
+  contracts: {
+    multicall3: {
+      address: "0xcA11bde05977b3631167028862bE2a173976CA11" as `0x${string}`,
+      blockCreated: 1_234_567,
+    },
+  },
+  testnet: true,
+} as const satisfies Chain;
+
+// Ethereum Mainnet (for reference)
+export const ethereumMainnet = {
+  id: 1,
+  name: "Ethereum",
+  nativeCurrency: {
+    decimals: 18,
+    name: "Ether",
+    symbol: "ETH",
+  },
+  rpcUrls: {
+    default: {
+      http: ["https://eth.llamarpc.com"],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: "Etherscan",
+      url: "https://etherscan.io",
+    },
+  },
+} as const satisfies Chain;
+
+// Helper function to get chain details by ID
+export function getChainById(chainId: number): Chain | undefined {
+  switch (chainId) {
+    case abstractMainnet.id:
+      return abstractMainnet;
+    case abstractTestnet.id:
+      return abstractTestnet;
+    case ethereumMainnet.id:
+      return ethereumMainnet;
+    default:
+      return undefined;
+  }
+}
+
+// Helper function to get chain details by mode
+export function getChainByMode(mode: "game" | "claim"): Chain {
+  return mode === "game" ? abstractMainnet : abstractTestnet;
+}

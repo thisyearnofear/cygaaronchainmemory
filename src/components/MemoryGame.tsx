@@ -5,7 +5,7 @@ import { usePenguinGameContract, type GameError } from "@/lib/contract";
 import Image from "next/image";
 import { useAccount } from "wagmi";
 import LeaderboardDisplay from "./LeaderboardDisplay";
-import NetworkCheck from "./NetworkCheck";
+import { NetworkCheck } from "./NetworkCheck";
 import MiniLeaderboard from "./MiniLeaderboard";
 import CommentaryOverlay from "./CommentaryOverlay";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
@@ -367,7 +367,7 @@ const MemoryGame: React.FC = () => {
         selectedTiles: [],
         tiles: prev.tiles.map((tile) => ({
           ...tile,
-          revealed: tile.matched ? true : false, // Keep matched tiles revealed
+          revealed: !!tile.matched, // Keep matched tiles revealed
         })),
       }));
       pendingHideRef.current = null;
