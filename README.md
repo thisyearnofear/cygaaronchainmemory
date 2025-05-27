@@ -1,4 +1,4 @@
-# Remenguiny - Memory Game with Web3 Integration
+# Remenguiny
 
 A delightful memory game featuring penguins, powered by blockchain technology and AI integration.
 
@@ -24,11 +24,9 @@ Remenguiny is a live, working product built on Abstract Mainnet, featuring the u
 
 We're enhancing Remenguiny as part of the Surreal World Assets Buildathon, focusing on solving real-world problems with real-world assets.
 
-### Prize Pool: $55,000+
-
 ### Key Partners & Technologies
 
-#### Story (Host)
+#### Story Protocol (Host)
 
 - The World's IP Blockchain
 - Purpose-built L1 for tokenizing intelligence
@@ -80,11 +78,6 @@ We're enhancing Remenguiny as part of the Surreal World Assets Buildathon, focus
    - IRL residency opportunities
    - Builder community access
    - Malaysia-Singapore SEZ program
-
-### Special Prizes
-
-- Free e-SIMs for top 50 teams
-- Up to 3 builders selected for 1-3 month IRL Residency
 
 ### Enhancement Plan
 
